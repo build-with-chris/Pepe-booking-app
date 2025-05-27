@@ -11,8 +11,12 @@ class DataManager:
 
     def get_artist(self, artist_id):
         return Artist.query.get(artist_id)
+    
+    # in datamanager.py, innerhalb class DataManager:
+    def get_artist_by_email(self, email):
+        return Artist.query.filter_by(email=email).first()
 
-    def create_artist(self, name, email, phone_number=None, price_min=1500, price_max=1900):
+    def create_artist(self, name, email, password, phone_number=None, price_min=1500, price_max=1900):
         artist = Artist(
             name=name,
             email=email,
@@ -20,6 +24,7 @@ class DataManager:
             price_min=price_min,
             price_max=price_max
         )
+        artist.set_password(password) 
         self.db.session.add(artist)
         self.db.session.commit()
         return artist
@@ -31,7 +36,8 @@ class DataManager:
     def get_request(self, request_id):
         return BookingRequest.query.get(request_id)
 
-    def create_request(self, client_name, client_email, event_date, duration_hours, show_type, artist_ids):
+    def create_request(self, client_name, client_email, event_date, duration_hours, show_type, 
+                       artist_ids, distance_km=0.0,newsletter_opt_in=False):
         # event_date as date object or string 'YYYY-MM-DD'
         if isinstance(event_date, str):
             event_date = date.fromisoformat(event_date)
@@ -40,7 +46,9 @@ class DataManager:
             client_email=client_email,
             event_date=event_date,
             duration_hours=duration_hours,
-            show_type=show_type
+            show_type=show_type,
+            distance_km=distance_km,
+            newsletter_opt_in=newsletter_opt_in
         )
         # associate artists
         for aid in artist_ids:
@@ -88,3 +96,11 @@ class DataManager:
             self.db.session.delete(slot)
             self.db.session.commit()
         return slot
+
+    def delete_artist(self, artist_id):
+            artist = Artist.query.get(artist_id)
+            if artist:
+                self.db.session.delete(artist)
+                self.db.session.commit()
+                return True
+            return False

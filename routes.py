@@ -27,6 +27,7 @@ def create_artist():
     artist = dm.create_artist(
         name=data['name'],
         email=data['email'],
+        password = data['password'],
         phone_number=data.get('phone_number')
     )
     # Set password if provided
@@ -34,6 +35,22 @@ def create_artist():
         artist.set_password(data['password'])
         db.session.commit()
     return jsonify({'id': artist.id}), 201
+
+@api_bp.route('/artists/<int:artist_id>', methods=['DELETE'])
+@login_required
+def delete_artist(artist_id):
+    # nur der eingeloggte Artist darf sich selbst löschen
+    if current_user.id != artist_id:
+        return jsonify({'error':'Forbidden'}), 403
+
+    success = dm.delete_artist(artist_id)
+    if success:
+        # und gleich ausloggen
+        from flask_login import logout_user
+        logout_user()
+        return jsonify({'deleted': artist_id}), 200
+
+    return jsonify({'error':'Not found'}), 404
 
 # Booking Requests
 @api_bp.route('/requests', methods=['GET'])
@@ -119,20 +136,14 @@ def change_status(req_id):
 @api_bp.route('/availability', methods=['GET'])
 @login_required
 def get_availability():
-    artist_id = request.args.get('artist_id', type=int)
-    if artist_id != current_user.id:
-        return jsonify({'error':'Forbidden'}), 403
-    slots = dm.get_availabilities(artist_id)
+    slots = dm.get_availabilities(current_user.id)
     return jsonify([{'id': s.id, 'date': s.date.isoformat()} for s in slots])
 
 @api_bp.route('/availability', methods=['POST'])
 @login_required
 def add_availability():
-    data = request.json
-    artist_id = data.get('artist_id')
-    if artist_id != current_user.id:
-        return jsonify({'error':'Forbidden'}), 403
-    slot = dm.add_availability(artist_id, data['date'])
+    date_str = request.json.get('date')
+    slot = dm.add_availability(current_user.id, date_str)
     return jsonify({'id': slot.id}), 201
 
 @api_bp.route('/availability/<int:slot_id>', methods=['DELETE'])

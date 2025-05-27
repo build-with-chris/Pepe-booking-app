@@ -1,5 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import UserMixin 
 
 db = SQLAlchemy()
 
@@ -10,7 +11,7 @@ booking_artists = db.Table(
     db.Column('artist_id',  db.Integer, db.ForeignKey('artists.id'), primary_key=True)
 )
 
-class Artist(db.Model):
+class Artist(UserMixin, db.Model):
     __tablename__ = 'artists'
     id             = db.Column(db.Integer, primary_key=True)
     name           = db.Column(db.String(100), nullable=False)
