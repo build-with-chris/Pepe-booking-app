@@ -12,6 +12,7 @@ def login():
     if request.method == 'POST':
         email = request.form.get('email')
         pw    = request.form.get('password')
+        print(pw)
         artist = dm.get_artist_by_email(email)
         if artist and artist.check_password(pw):
             login_user(artist)
@@ -19,6 +20,10 @@ def login():
             return redirect(url_for('api.list_requests'))
         flash('Invalid email or password', 'danger')
     return render_template('login.html')
+
+
+# localStorage entfernen 
+
 
 @auth_bp.route('/logout')
 @login_required

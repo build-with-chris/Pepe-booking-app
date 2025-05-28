@@ -2,7 +2,7 @@ from flask import current_app
 from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
 from datamanager import DataManager
-from services import calculate_price, send_push
+from services import calculate_price
 from models import db
 
 api_bp = Blueprint('api', __name__)
@@ -25,10 +25,11 @@ def list_artists():
 def create_artist():
     data = request.json
     artist = dm.create_artist(
-        name=data['name'],
-        email=data['email'],
-        password = data['password'],
-        phone_number=data.get('phone_number')
+        name         = data['name'],
+        email        = data['email'],
+        password     = data['password'],
+        phone_number = data.get('phone_number'),
+        address      = data.get('address')
     )
     # Set password if provided
     if 'password' in data:
@@ -61,16 +62,26 @@ def list_requests():
     # Filter: only those including current_user
     reqs = [r for r in all_reqs if current_user in r.artists]
     return jsonify([{
-        'id': r.id,
-        'client_name': r.client_name,
-        'email': r.client_email,
-        'date': r.event_date.isoformat(),
-        'duration_hours': r.duration_hours,
-        'show_type': r.show_type,
-        'status': r.status,
-        'price_min': r.price_min,
-        'price_max': r.price_max,
-        'price_offered': r.price_offered,
+        'id':                r.id,
+        'client_name':       r.client_name,
+        'client_email':      r.client_email,
+        'event_date':        r.event_date.isoformat(),
+        'event_time':        r.event_time.isoformat() if r.event_time else None,
+        'duration_minutes':  r.duration_minutes,
+        'event_type':        r.event_type,
+        'show_type':         r.show_type,
+        'team_size':         r.team_size,
+        'number_of_guests':  r.number_of_guests,
+        'event_address':     r.event_address,
+        'is_indoor':         r.is_indoor,
+        'special_requests':  r.special_requests,
+        'needs_light':       r.needs_light,
+        'needs_sound':       r.needs_sound,
+        'needs_fog':         r.needs_fog,
+        'status':            r.status,
+        'price_min':         r.price_min,
+        'price_max':         r.price_max,
+        'price_offered':     r.price_offered,
         'artist_ids': [a.id for a in r.artists]
     } for r in reqs])
 
@@ -78,14 +89,24 @@ def list_requests():
 def create_request():
     data = request.json
     req = dm.create_request(
-        client_name      = data['client_name'],
-        client_email     = data['client_email'],
-        event_date       = data['event_date'],
-        duration_hours   = data['duration_hours'],
-        show_type        = data['show_type'],
-        artist_ids       = data['artist_ids'],
-        distance_km      = data.get('distance_km', 0.0),
-        newsletter_opt_in= data.get('newsletter_opt_in', False)
+        client_name       = data['client_name'],
+        client_email      = data['client_email'],
+        event_date        = data['event_date'],
+        event_time        = data['event_time'],
+        duration_minutes  = data['duration_minutes'],
+        event_type        = data['event_type'],
+        show_type         = data['show_type'],
+        team_size         = data['team_size'],
+        number_of_guests  = data['number_of_guests'],
+        event_address     = data['event_address'],
+        is_indoor         = data['is_indoor'],
+        special_requests  = data.get('special_requests',''),
+        needs_light       = data.get('needs_light', False),
+        needs_sound       = data.get('needs_sound', False),
+        needs_fog         = data.get('needs_fog', False),
+        artist_ids        = data['artist_ids'],
+        distance_km       = data.get('distance_km', 0.0),
+        newsletter_opt_in = data.get('newsletter_opt_in', False)
     )
     # Sum base prices
     base_min = sum(a.price_min for a in req.artists)
@@ -93,10 +114,22 @@ def create_request():
     fee_pct = float(current_app.config.get("AGENCY_FEE_PERCENT", 20))
     # Calculate and store
     pmin, pmax = calculate_price(
-        base_min, base_max,
-        distance_km=req.distance_km,
-        fee_pct=fee_pct,
-        newsletter=req.newsletter_opt_in
+        base_min       = base_min,
+        base_max       = base_max,
+        distance_km    = req.distance_km,
+        fee_pct        = fee_pct,
+        newsletter     = req.newsletter_opt_in,
+        event_type     = req.event_type,
+        num_guests     = req.number_of_guests,
+        is_weekend     = req.event_date.weekday() >= 5,
+        is_indoor      = req.is_indoor,
+        needs_light    = req.needs_light,
+        needs_sound    = req.needs_sound,
+        needs_fog      = req.needs_fog,
+        show_type      = req.show_type,
+        team_size      = req.team_size,
+        duration       = req.duration_minutes,
+        city           = None  # optional: extract city from event_address
     )
     req.price_min = pmin
     req.price_max = pmax

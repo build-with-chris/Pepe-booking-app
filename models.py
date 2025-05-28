@@ -17,10 +17,13 @@ class Artist(UserMixin, db.Model):
     name           = db.Column(db.String(100), nullable=False)
     email          = db.Column(db.String(120), nullable=False, unique=True)
     phone_number   = db.Column(db.String(20), nullable=True)
+    address        = db.Column(db.String(200), nullable=True)
     password_hash  = db.Column(db.String(128), nullable=False)
     push_token     = db.Column(db.String(200), nullable=True)  # for push notifications
     price_min      = db.Column(db.Integer, default=1500)
     price_max      = db.Column(db.Integer, default=1900)
+
+
 
     # Many-to-many relationship to BookingRequest
     bookings       = db.relationship(
@@ -37,18 +40,32 @@ class Artist(UserMixin, db.Model):
 
 class BookingRequest(db.Model):
     __tablename__ = 'booking_requests'
-    id               = db.Column(db.Integer, primary_key=True)
-    client_name      = db.Column(db.String(100), nullable=False)
-    client_email     = db.Column(db.String(120), nullable=False)
-    event_date       = db.Column(db.Date, nullable=False)
-    duration_hours   = db.Column(db.Integer, nullable=False)  # Event duration in hours
-    show_type        = db.Column(db.String(50), nullable=False)  # solo/duo/team
-    status           = db.Column(db.String(20), default='requested')
-    distance_km      = db.Column(db.Float, nullable=False, default=0.0)
-    newsletter_opt_in= db.Column(db.Boolean, default=False)
-    price_min        = db.Column(db.Integer, nullable=True)
-    price_max        = db.Column(db.Integer, nullable=True)
-    price_offered    = db.Column(db.Integer, nullable=True)
+    id                 = db.Column(db.Integer, primary_key=True)
+    client_name        = db.Column(db.String(100), nullable=False)
+    client_email       = db.Column(db.String(120), nullable=False)
+
+    # NEU: Event-Daten
+    event_type         = db.Column(db.String(50), nullable=False)   # Cooperate, Privat, Incentive, Streetshow
+    show_type          = db.Column(db.String(20), nullable=False)
+    team_size          = db.Column(db.String(10), nullable=False)   
+    number_of_guests   = db.Column(db.Integer, nullable=True)       
+    event_address      = db.Column(db.String(200), nullable=True)   
+    is_indoor          = db.Column(db.Boolean, default=True)        # Indoor (True) / Outdoor (False)
+    event_date         = db.Column(db.Date, nullable=False)         # Date
+    event_time         = db.Column(db.Time, nullable=True)          
+    duration_minutes   = db.Column(db.Integer, nullable=False)     
+    special_requests   = db.Column(db.Text, nullable=True)          
+
+    needs_light        = db.Column(db.Boolean, default=False)
+    needs_sound        = db.Column(db.Boolean, default=False)
+    needs_fog          = db.Column(db.Boolean, default=False)
+
+    distance_km        = db.Column(db.Float, nullable=False, default=0.0)
+    newsletter_opt_in  = db.Column(db.Boolean, default=False)
+    price_min          = db.Column(db.Integer, nullable=True)
+    price_max          = db.Column(db.Integer, nullable=True)
+    price_offered      = db.Column(db.Integer, nullable=True)
+    status             = db.Column(db.String(20), default='requested')
 
     # Booking <-> Artist many-to-many
     artists          = db.relationship(

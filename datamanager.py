@@ -1,5 +1,5 @@
 from models import db, Artist, BookingRequest, Availability
-from datetime import date
+from datetime import date, time
 
 class DataManager:
     def __init__(self):
@@ -16,11 +16,12 @@ class DataManager:
     def get_artist_by_email(self, email):
         return Artist.query.filter_by(email=email).first()
 
-    def create_artist(self, name, email, password, phone_number=None, price_min=1500, price_max=1900):
+    def create_artist(self, name, email, password, phone_number=None, address=None, price_min=1500, price_max=1900):
         artist = Artist(
             name=name,
             email=email,
             phone_number=phone_number,
+            address=address,
             price_min=price_min,
             price_max=price_max
         )
@@ -36,20 +37,42 @@ class DataManager:
     def get_request(self, request_id):
         return BookingRequest.query.get(request_id)
 
-    def create_request(self, client_name, client_email, event_date, duration_hours, show_type, 
-                       artist_ids, distance_km=0.0,newsletter_opt_in=False):
+    def create_request(self,
+                       client_name, client_email,
+                       event_date, event_time,
+                       duration_minutes,
+                       event_type, show_type, team_size,
+                       number_of_guests, event_address,
+                       is_indoor, special_requests,
+                       needs_light, needs_sound, needs_fog, artist_ids,
+                       distance_km=0.0, newsletter_opt_in=False):
         # event_date as date object or string 'YYYY-MM-DD'
         if isinstance(event_date, str):
             event_date = date.fromisoformat(event_date)
+        # event_time as string 'HH:MM'
+        if isinstance(event_time, str):
+             event_time = time.fromisoformat(event_time)
+
         request = BookingRequest(
-            client_name=client_name,
-            client_email=client_email,
-            event_date=event_date,
-            duration_hours=duration_hours,
-            show_type=show_type,
-            distance_km=distance_km,
-            newsletter_opt_in=newsletter_opt_in
-        )
+            client_name       = client_name,
+            client_email      = client_email,
+            event_date         = event_date,
+            event_time         = event_time,
+            duration_minutes   = duration_minutes,
+            event_type         = event_type,
+            show_type          = show_type,
+            team_size          = team_size,
+            number_of_guests   = number_of_guests,
+            event_address      = event_address,
+            is_indoor          = is_indoor,
+            special_requests   = special_requests,
+            needs_light        = needs_light,
+            needs_sound        = needs_sound,
+            needs_fog          = needs_fog,
+            distance_km        = distance_km,
+            newsletter_opt_in  = newsletter_opt_in
+         )
+   
         # associate artists
         for aid in artist_ids:
             artist = self.get_artist(aid)
