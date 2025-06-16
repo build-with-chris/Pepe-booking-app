@@ -39,12 +39,12 @@ class DataManager:
 
     def create_request(self,
                        client_name, client_email,
-                       event_date, event_time,
-                       duration_minutes,
+                       event_date, duration_minutes,
                        event_type, show_type, team_size,
                        number_of_guests, event_address,
                        is_indoor, special_requests,
-                       needs_light, needs_sound, needs_fog, artist_ids,
+                       needs_light, needs_sound, needs_fog, 
+                       artist_ids, event_time="18:00",
                        distance_km=0.0, newsletter_opt_in=False):
         # event_date as date object or string 'YYYY-MM-DD'
         if isinstance(event_date, str):
@@ -63,7 +63,7 @@ class DataManager:
             show_type          = show_type,
             team_size          = team_size,
             number_of_guests   = number_of_guests,
-            event_address      = event_address,
+            event_address       = event_address,
             is_indoor          = is_indoor,
             special_requests   = special_requests,
             needs_light        = needs_light,
@@ -127,3 +127,14 @@ class DataManager:
                 self.db.session.commit()
                 return True
             return False
+    
+    def get_all_availabilities(self):
+        """Gibt alle Availability-Einträge zurück, egal von welchem Artist."""
+        return Availability.query.all()
+
+    def get_all_offers(self):
+        """
+        Gibt alle BookingRequest-Einträge zurück, bei denen bereits ein Angebot 
+        gesetzt wurde (price_offered != None).
+        """
+        return BookingRequest.query.filter(BookingRequest.price_offered.isnot(None)).all()

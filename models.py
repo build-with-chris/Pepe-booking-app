@@ -20,10 +20,9 @@ class Artist(UserMixin, db.Model):
     address        = db.Column(db.String(200), nullable=True)
     password_hash  = db.Column(db.String(128), nullable=False)
     push_token     = db.Column(db.String(200), nullable=True)  # for push notifications
+    is_admin       = db.Column(db.Boolean, default=False)
     price_min      = db.Column(db.Integer, default=1500)
     price_max      = db.Column(db.Integer, default=1900)
-
-
 
     # Many-to-many relationship to BookingRequest
     bookings       = db.relationship(

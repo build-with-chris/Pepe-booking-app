@@ -1,7 +1,7 @@
 from flask import Flask
 from config import Config
 from models import db
-from routes import api_bp
+from routes import api_bp, admin_bp
 from flask_jwt_extended import JWTManager
 from flask_login import LoginManager
 from auth_routes import auth_bp
@@ -24,6 +24,7 @@ jwt = JWTManager(app)
 
 app.register_blueprint(auth_bp, url_prefix='/auth')
 app.register_blueprint(api_bp,  url_prefix='/api')
+app.register_blueprint(admin_bp, url_prefix='/admin')
 
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 

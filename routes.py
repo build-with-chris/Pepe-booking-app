@@ -1,14 +1,14 @@
 from flask import current_app
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, render_template
 from flask_login import login_required, current_user
 from datamanager import DataManager
 from services import calculate_price
 from models import db
 
 api_bp = Blueprint('api', __name__)
+admin_bp = Blueprint('admin', __name__, template_folder='templates')
 dm = DataManager()
 
-# Authentication routes (login/logout) would be in a separate auth blueprint
 
 # Artists
 @api_bp.route('/artists', methods=['GET'])
@@ -155,6 +155,10 @@ def set_offer(req_id):
         send_push(artist, f'New offer: {price} EUR for request {req_id}')
     return jsonify({'status':'offered'})
 
+def send_push(artist, message):
+    current_app.logger.info(f"PUSH to {artist.id}: {message}")
+
+
 @api_bp.route('/requests/<int:req_id>/status', methods=['PUT'])
 @login_required
 def change_status(req_id):
@@ -175,9 +179,18 @@ def get_availability():
 @api_bp.route('/availability', methods=['POST'])
 @login_required
 def add_availability():
-    date_str = request.json.get('date')
-    slot = dm.add_availability(current_user.id, date_str)
-    return jsonify({'id': slot.id}), 201
+    data = request.get_json()
+    if isinstance(data, list):
+        slots = []
+        for item in data:
+            date_str = item.get('date')
+            slot = dm.add_availability(current_user.id, date_str)
+            slots.append({'id': slot.id})
+        return jsonify(slots), 201
+    else:
+        date_str = data.get('date')
+        slot = dm.add_availability(current_user.id, date_str)
+        return jsonify({'id': slot.id}), 201
 
 @api_bp.route('/availability/<int:slot_id>', methods=['DELETE'])
 @login_required
@@ -186,3 +199,17 @@ def remove_availability(slot_id):
     if not slot or slot.artist_id != current_user.id:
         return jsonify({'error':'Forbidden'}), 403
     return jsonify({'deleted': slot_id})
+
+
+# Admin rights
+@admin_bp.route('/dashboard')
+@login_required
+def dashboard():
+    if not current_user.is_admin:
+        return "Forbidden", 403
+
+    all_slots  = dm.get_all_availabilities()
+    all_offers = dm.get_all_offers()
+    return render_template('dashboard.html',
+                           slots=all_slots,
+                           offers=all_offers)
