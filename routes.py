@@ -93,7 +93,6 @@ def list_requests():
         'special_requests':  r.special_requests,
         'needs_light':       r.needs_light,
         'needs_sound':       r.needs_sound,
-        # 'needs_fog' removed
         'status':            r.status,
         'price_min':         r.price_min,
         'price_max':         r.price_max,

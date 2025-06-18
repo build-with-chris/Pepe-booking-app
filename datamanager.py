@@ -1,3 +1,6 @@
+from models import db, Artist, BookingRequest, Availability, Discipline
+from datetime import date, time
+
 ALLOWED_DISCIPLINES = [
     "Zauberer",
     "Cyr-Wheel",
@@ -16,8 +19,7 @@ ALLOWED_DISCIPLINES = [
 ]
 
 ALLOWED_EVENT_TYPES = ['Private Feier', 'Firmenfeier', 'Incentive', 'Streetshow']
-from models import db, Artist, BookingRequest, Availability, Discipline
-from datetime import date, time
+
 
 class DataManager:
     def __init__(self):
@@ -198,6 +200,9 @@ class DataManager:
         # date_obj: date or string
         if isinstance(date_obj, str):
             date_obj = date.fromisoformat(date_obj)
+        existing = Availability.query.filter_by(artist_id=artist_id, date=date_obj).first()
+        if existing:
+            return existing  # Slot existiert schon, nichts tun
         slot = Availability(artist_id=artist_id, date=date_obj)
         self.db.session.add(slot)
         self.db.session.commit()

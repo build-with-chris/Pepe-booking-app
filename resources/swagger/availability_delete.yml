@@ -1,11 +1,14 @@
 tags:
   - Availability
+description: |
+  Delete a specific availability slot for an artist. Use this to block a day when the artist is not available.
 parameters:
   - name: slot_id
     in: path
     type: integer
     required: true
     description: ID of the availability slot to delete
+    default: 123
 responses:
   200:
     description: Availability slot deleted successfully

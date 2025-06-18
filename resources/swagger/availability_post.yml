@@ -1,5 +1,8 @@
 tags:
   - Availability
+description: |
+  Add a new availability date for an artist. By default, artists are available every day for the next year.
+  Use this endpoint to add back a day if it was removed.
 parameters:
   - name: body
     in: body
