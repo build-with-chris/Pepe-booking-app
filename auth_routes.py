@@ -2,12 +2,14 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_user, logout_user, login_required, current_user
 from datamanager import DataManager
+from flasgger import swag_from
 
 auth_bp = Blueprint('auth', __name__, template_folder='templates')
 
 dm = DataManager()
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
+@swag_from('resources/swagger/auth_login.yml')
 def login():
     if request.method == 'POST':
         email = request.form.get('email')
@@ -27,6 +29,8 @@ def login():
 
 @auth_bp.route('/logout')
 @login_required
+@swag_from('resources/swagger/auth_logout.yml')
+
 def logout():
     logout_user()
     flash('You have been logged out.', 'info')

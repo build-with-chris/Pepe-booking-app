@@ -1,0 +1,26 @@
+tags:
+  - Artists
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        phone_number:
+          type: string
+        address:
+          type: string
+        is_admin:
+          type: boolean
+        discipline:
+          type: string
+responses:
+  201:
+    description: Artist created

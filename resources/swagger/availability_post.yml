@@ -1,0 +1,14 @@
+tags:
+  - Availability
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      properties:
+        date:
+          type: string
+responses:
+  201:
+    description: Availability slot(s) added successfully

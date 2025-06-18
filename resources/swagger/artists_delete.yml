@@ -1,0 +1,15 @@
+tags:
+  - Artists
+parameters:
+  - name: artist_id
+    in: path
+    type: integer
+    required: true
+    description: ID of the artist to delete
+responses:
+  200:
+    description: Artist deleted successfully
+  403:
+    description: Forbidden - Not allowed to delete this artist
+  404:
+    description: Artist not found

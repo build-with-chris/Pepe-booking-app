@@ -16,19 +16,28 @@ class DataManager:
     def get_artist_by_email(self, email):
         return Artist.query.filter_by(email=email).first()
 
-    def create_artist(self, name, email, password, phone_number=None, address=None, price_min=1500, price_max=1900):
+    def create_artist(self, name, email, password, discipline, phone_number=None, address=None, price_min=1500, price_max=1900, is_admin=False):
         artist = Artist(
             name=name,
             email=email,
+            discipline   = discipline,
             phone_number=phone_number,
             address=address,
             price_min=price_min,
-            price_max=price_max
+            price_max=price_max,
+            is_admin=is_admin,
+           
         )
         artist.set_password(password) 
         self.db.session.add(artist)
         self.db.session.commit()
         return artist
+
+    def get_artists_by_discipline(self, discipline):
+        """
+        Returns a list of Artist instances matching the given discipline.
+        """
+        return Artist.query.filter_by(discipline=discipline).all()
 
     # BookingRequest methods
     def get_all_requests(self):
@@ -44,7 +53,7 @@ class DataManager:
                        number_of_guests, event_address,
                        is_indoor, special_requests,
                        needs_light, needs_sound, needs_fog, 
-                       artist_ids, event_time="18:00",
+                       artists, event_time="18:00",
                        distance_km=0.0, newsletter_opt_in=False):
         # event_date as date object or string 'YYYY-MM-DD'
         if isinstance(event_date, str):
@@ -74,10 +83,8 @@ class DataManager:
          )
    
         # associate artists
-        for aid in artist_ids:
-            artist = self.get_artist(aid)
-            if artist:
-                request.artists.append(artist)
+        for artist in artists:
+            request.artists.append(artist)
         self.db.session.add(request)
         self.db.session.commit()
         return request

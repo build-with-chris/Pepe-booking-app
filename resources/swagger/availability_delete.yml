@@ -1,0 +1,15 @@
+tags:
+  - Availability
+parameters:
+  - name: slot_id
+    in: path
+    type: integer
+    required: true
+    description: ID of the availability slot to delete
+responses:
+  200:
+    description: Availability slot deleted successfully
+  403:
+    description: Not allowed to delete this slot
+  404:
+    description: Slot not found

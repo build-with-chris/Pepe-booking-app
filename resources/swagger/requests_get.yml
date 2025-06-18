@@ -1,0 +1,53 @@
+tags:
+  - Requests
+responses:
+  200:
+    description: List of booking requests for the current artist
+    schema:
+      type: array
+      items:
+        properties:
+          id:
+            type: integer
+          client_name:
+            type: string
+          client_email:
+            type: string
+          event_date:
+            type: string
+          event_time:
+            type: string
+          duration_minutes:
+            type: integer
+          event_type:
+            type: string
+          show_type:
+            type: string
+          team_size:
+            type: integer
+          number_of_guests:
+            type: integer
+          event_address:
+            type: string
+          is_indoor:
+            type: boolean
+          special_requests:
+            type: string
+          needs_light:
+            type: boolean
+          needs_sound:
+            type: boolean
+          needs_fog:
+            type: boolean
+          status:
+            type: string
+          price_min:
+            type: number
+          price_max:
+            type: number
+          price_offered:
+            type: number
+          artist_ids:
+            type: array
+            items:
+              type: integer

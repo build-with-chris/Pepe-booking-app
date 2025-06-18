@@ -1,0 +1,13 @@
+tags:
+  - Availability
+responses:
+  200:
+    description: List of availability slots for the current artist
+    schema:
+      type: array
+      items:
+        properties:
+          id:
+            type: integer
+          date:
+            type: string

@@ -4,6 +4,7 @@ from flask_login import login_required, current_user
 from datamanager import DataManager
 from services import calculate_price
 from models import db
+from flasgger import swag_from
 
 api_bp = Blueprint('api', __name__)
 admin_bp = Blueprint('admin', __name__, template_folder='templates')
@@ -12,16 +13,19 @@ dm = DataManager()
 
 # Artists
 @api_bp.route('/artists', methods=['GET'])
+@swag_from('resources/swagger/artists_get.yml')
 def list_artists():
     artists = dm.get_all_artists()
     return jsonify([{
         'id': a.id,
         'name': a.name,
         'email': a.email,
-        'phone_number': a.phone_number
+        'phone_number': a.phone_number,
+        'discipline': a.discipline,
     } for a in artists])
 
 @api_bp.route('/artists', methods=['POST'])
+@swag_from('resources/swagger/artists_post.yml')
 def create_artist():
     data = request.json
     artist = dm.create_artist(
@@ -29,7 +33,9 @@ def create_artist():
         email        = data['email'],
         password     = data['password'],
         phone_number = data.get('phone_number'),
-        address      = data.get('address')
+        address      = data.get('address'),
+        is_admin     = data.get('is_admin'),
+        discipline   = data['discipline']
     )
     # Set password if provided
     if 'password' in data:
@@ -39,6 +45,7 @@ def create_artist():
 
 @api_bp.route('/artists/<int:artist_id>', methods=['DELETE'])
 @login_required
+@swag_from('resources/swagger/artists_delete.yml')
 def delete_artist(artist_id):
     # nur der eingeloggte Artist darf sich selbst löschen
     if current_user.id != artist_id:
@@ -56,6 +63,7 @@ def delete_artist(artist_id):
 # Booking Requests
 @api_bp.route('/requests', methods=['GET'])
 @login_required
+@swag_from('resources/swagger/requests_get.yml')
 def list_requests():
     # Only show requests for this artist
     all_reqs = dm.get_all_requests()
@@ -86,8 +94,12 @@ def list_requests():
     } for r in reqs])
 
 @api_bp.route('/requests', methods=['POST'])
+@swag_from('resources/swagger/requests_post.yml')
 def create_request():
     data = request.json
+    # Determine artists by discipline instead of explicit IDs, so the customer can choose just the discipline
+    discipline = data.get('discipline')
+    artist_objs = dm.get_artists_by_discipline(discipline)
     req = dm.create_request(
         client_name       = data['client_name'],
         client_email      = data['client_email'],
@@ -104,7 +116,7 @@ def create_request():
         needs_light       = data.get('needs_light', False),
         needs_sound       = data.get('needs_sound', False),
         needs_fog         = data.get('needs_fog', False),
-        artist_ids        = data['artist_ids'],
+        artists           = artist_objs,
         distance_km       = data.get('distance_km', 0.0),
         newsletter_opt_in = data.get('newsletter_opt_in', False)
     )
@@ -143,9 +155,11 @@ def create_request():
 
 @api_bp.route('/requests/<int:req_id>/offer', methods=['PUT'])
 @login_required
+@swag_from('resources/swagger/requests_offer_put.yml')
 def set_offer(req_id):
     req = dm.get_request(req_id)
-    if not req or current_user not in req.artists:
+    if not req or (current_user.id not in [a.id for a in req.artists]
+                   and not current_user.is_admin):
         return jsonify({'error':'Not allowed'}), 403
     data = request.json
     price = data.get('price_offered')
@@ -161,6 +175,7 @@ def send_push(artist, message):
 
 @api_bp.route('/requests/<int:req_id>/status', methods=['PUT'])
 @login_required
+@swag_from('resources/swagger/requests_status_put.yml')
 def change_status(req_id):
     data = request.json
     status = data.get('status')
@@ -172,12 +187,14 @@ def change_status(req_id):
 # Availability
 @api_bp.route('/availability', methods=['GET'])
 @login_required
+@swag_from('resources/swagger/availability_get.yml')
 def get_availability():
     slots = dm.get_availabilities(current_user.id)
     return jsonify([{'id': s.id, 'date': s.date.isoformat()} for s in slots])
 
 @api_bp.route('/availability', methods=['POST'])
 @login_required
+@swag_from('resources/swagger/availability_post.yml')
 def add_availability():
     data = request.get_json()
     if isinstance(data, list):
@@ -194,6 +211,7 @@ def add_availability():
 
 @api_bp.route('/availability/<int:slot_id>', methods=['DELETE'])
 @login_required
+@swag_from('resources/swagger/availability_delete.yml')
 def remove_availability(slot_id):
     slot = dm.remove_availability(slot_id)
     if not slot or slot.artist_id != current_user.id:

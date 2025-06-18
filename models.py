@@ -23,6 +23,7 @@ class Artist(UserMixin, db.Model):
     is_admin       = db.Column(db.Boolean, default=False)
     price_min      = db.Column(db.Integer, default=1500)
     price_max      = db.Column(db.Integer, default=1900)
+    discipline     = db.Column(db.String(50), nullable=False)  # e.g. Juggling, Magic, Music, Dance, etc.
 
     # Many-to-many relationship to BookingRequest
     bookings       = db.relationship(

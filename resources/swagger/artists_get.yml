@@ -1,0 +1,19 @@
+tags:
+      - Artists
+responses:
+  200:
+    description: A list of artists
+    schema:
+      type: array
+      items:
+        properties:
+          id:
+            type: integer
+          name:
+            type: string
+          email:
+            type: string
+          phone_number:
+            type: string
+          discipline:
+            type: string

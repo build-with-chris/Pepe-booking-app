@@ -1,0 +1,21 @@
+tags:
+  - Requests
+parameters:
+  - name: req_id
+    in: path
+    type: integer
+    required: true
+    description: ID of the booking request
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+responses:
+  200:
+    description: Status updated successfully
+  400:
+    description: Invalid request or status

@@ -1,0 +1,23 @@
+tags:
+  - Requests
+parameters:
+  - name: req_id
+    in: path
+    type: integer
+    required: true
+    description: ID of the booking request
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      properties:
+        price_offered:
+          type: number
+responses:
+  200:
+    description: Offer updated successfully
+  403:
+    description: Not allowed to update this offer
+  404:
+    description: Request not found

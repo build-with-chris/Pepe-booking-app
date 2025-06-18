@@ -1,0 +1,48 @@
+tags:
+  - Requests
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      properties:
+        client_name:
+          type: string
+        client_email:
+          type: string
+        event_date:
+          type: string
+        event_time:
+          type: string
+        duration_minutes:
+          type: integer
+        event_type:
+          type: string
+        show_type:
+          type: string
+        team_size:
+          type: integer
+        number_of_guests:
+          type: integer
+        event_address:
+          type: string
+        is_indoor:
+          type: boolean
+        special_requests:
+          type: string
+        needs_light:
+          type: boolean
+        needs_sound:
+          type: boolean
+        needs_fog:
+          type: boolean
+        discipline:
+          type: string
+        distance_km:
+          type: number
+        newsletter_opt_in:
+          type: boolean
+responses:
+  201:
+    description: Booking request created with calculated price range
