@@ -1,3 +1,9 @@
+description: |
+  Create a new booking request.
+
+  **Allowed Event Types:** Private Feier, Firmenfeier, Incentive, Streetshow
+
+  **Allowed Disciplines:** Zauberer, Cyr-Wheel, Bodenakrobatik, Luftakrobatik, Partnerakrobatik, Chinese Pole, Hula Hoop, Handstand, Contemporary Dance, Breakdance, Teeterboard, Jonglage, Moderation, Pantomime/Entertainment
 tags:
   - Requests
 parameters:
@@ -13,8 +19,10 @@ parameters:
           type: string
         event_date:
           type: string
+          default: '2025-12-31'
         event_time:
           type: string
+          default: '19:00'
         duration_minutes:
           type: integer
         event_address:
@@ -26,8 +34,11 @@ parameters:
             - Firmenfeier
             - Incentive
             - Streetshow
-        show_discipline:
+          description: "Allowed values: Private Feier, Firmenfeier, Incentive, Streetshow"
+          example: "Private Feier"
+        disciplines:
           type: array
+          description: "Allowed values: Zauberer, Cyr-Wheel, Bodenakrobatik, Luftakrobatik, Partnerakrobatik, Chinese Pole, Hula Hoop, Handstand, Contemporary Dance, Breakdance, Teeterboard, Jonglage, Moderation, Pantomime/Entertainment"
           items:
             type: string
             enum:
@@ -45,6 +56,7 @@ parameters:
               - Jonglage
               - Moderation
               - Pantomime/Entertainment
+          example: ["Zauberer", "Cyr-Wheel"]
         team_size:
           type: integer
         number_of_guests:

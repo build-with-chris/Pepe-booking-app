@@ -1,11 +1,20 @@
 tags:
   - Artists
+description: |
+  Create a new artist.
+
+  Allowed Disciplines: Zauberer, Cyr-Wheel, Bodenakrobatik, Luftakrobatik, Partnerakrobatik, Chinese Pole, Hula Hoop, Handstand, Contemporary Dance, Breakdance, Teeterboard, Jonglage, Moderation, Pantomime/Entertainment
 parameters:
   - name: body
     in: body
     required: true
     schema:
       type: object
+      required:
+        - name
+        - email
+        - password
+        - disciplines
       properties:
         name:
           type: string
@@ -19,10 +28,13 @@ parameters:
           type: string
         is_admin:
           type: boolean
+          default: false
         price_min:
           type: integer
+          default: 500
         price_max:
           type: integer
+          default: 2000
         disciplines:
           type: array
           items:
@@ -42,6 +54,8 @@ parameters:
               - Jonglage
               - Moderation
               - Pantomime/Entertainment
+          example:
+            - Cyr-Wheel
 responses:
   201:
     description: Artist created

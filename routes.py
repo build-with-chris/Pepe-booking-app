@@ -106,7 +106,7 @@ def list_requests():
 def create_request():
     data = request.json
     # Determine artists by discipline instead of explicit IDs, so the customer can choose just the discipline
-    disciplines = data.get('disciplines', [])
+    disciplines = data.get('show_discipline', [])
     artist_objs = dm.get_artists_by_discipline(disciplines)
     req = dm.create_request(
         client_name       = data['client_name'],
@@ -115,7 +115,7 @@ def create_request():
         event_time        = data['event_time'],
         duration_minutes  = data['duration_minutes'],
         event_type        = data['event_type'],
-        show_discipline   = disciplines,
+        show_discipline   = data['show_discipline'],
         team_size         = data['team_size'],
         number_of_guests  = data['number_of_guests'],
         event_address     = data['event_address'],

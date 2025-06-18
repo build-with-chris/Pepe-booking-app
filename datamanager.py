@@ -51,6 +51,7 @@ class DataManager:
     def create_artist(self, name, email, password, disciplines,
                       phone_number=None, address=None,
                       price_min=1500, price_max=1900, is_admin=False):
+        from datetime import timedelta
         artist = Artist(
             name=name,
             email=email,
@@ -65,22 +66,46 @@ class DataManager:
             disc = self.get_or_create_discipline(disc_name)
             artist.disciplines.append(disc)
         self.db.session.add(artist)
+        self.db.session.flush()  # so we have artist.id before commit
+
+        # Add availabilities for next 365 days
+        today = date.today()
+        for i in range(365):
+            day = today + timedelta(days=i)
+            slot = Availability(artist_id=artist.id, date=day)
+            self.db.session.add(slot)
+
         self.db.session.commit()
         return artist
 
-    def get_artists_by_discipline(self, disciplines):
+    def get_artists_by_discipline(self, disciplines, event_date):
         """
-        Returns a list of Artist instances matching the given discipline.
+        Returns Artists matching any given discipline AND available on event_date.
         """
         if isinstance(disciplines, str):
             disciplines = [disciplines]
 
+        normalized = []
+        for name in disciplines:
+            name = name.strip()
+            for allowed in ALLOWED_DISCIPLINES:
+                if allowed.lower() == name.lower():
+                    normalized.append(allowed)
+                    break
+
+        if isinstance(event_date, str):
+            event_date = date.fromisoformat(event_date)
+
         return (
             Artist.query
             .join(Artist.disciplines)
-            .filter(Discipline.name.in_(disciplines))
+            .join(Artist.availabilities)
+            .filter(
+                Discipline.name.in_(normalized),
+                Availability.date == event_date
+            )
             .all()
-    )
+        )
 
     # BookingRequest methods
     def get_all_requests(self):

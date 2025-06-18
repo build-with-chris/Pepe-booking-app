@@ -1,9 +1,71 @@
 tags:
   - Admin
-summary: Admin dashboard page
-description: Renders an HTML dashboard for admin users.
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      required:
+        - name
+        - email
+        - password
+        - disciplines
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        phone_number:
+          type: string
+        address:
+          type: string
+        is_admin:
+          type: boolean
+        price_min:
+          type: integer
+        price_max:
+          type: integer
+        disciplines:
+          type: array
+          description: |
+            Select one or more allowed disciplines from the list:
+            - Zauberer
+            - Cyr-Wheel
+            - Bodenakrobatik
+            - Luftakrobatik
+            - Partnerakrobatik
+            - Chinese Pole
+            - Hula Hoop
+            - Handstand
+            - Contemporary Dance
+            - Breakdance
+            - Teeterboard
+            - Jonglage
+            - Moderation
+            - Pantomime/Entertainment
+          items:
+            type: string
+            enum:
+              - Zauberer
+              - Cyr-Wheel
+              - Bodenakrobatik
+              - Luftakrobatik
+              - Partnerakrobatik
+              - Chinese Pole
+              - Hula Hoop
+              - Handstand
+              - Contemporary Dance
+              - Breakdance
+              - Teeterboard
+              - Jonglage
+              - Moderation
+              - Pantomime/Entertainment
+          example:
+            - Zauberer
+            - Cyr-Wheel
 responses:
-  200:
-    description: HTML page with overview of availabilities and offers.
-  403:
-    description: Forbidden if user is not admin.
+  201:
+    description: Artist created
