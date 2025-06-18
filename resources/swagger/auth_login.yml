@@ -1,18 +1,22 @@
 tags:
   - Auth
+summary: Log in an existing user
+description: Use this endpoint to authenticate a user by email and password.
+consumes:
+  - application/x-www-form-urlencoded
 parameters:
-  - name: body
-    in: body
+  - name: email
+    in: formData
+    type: string
     required: true
-    schema:
-      type: object
-      properties:
-        email:
-          type: string
-        password:
-          type: string
+    description: User's email address
+  - name: password
+    in: formData
+    type: string
+    required: true
+    description: User's password
 responses:
   200:
-    description: Successful login redirects to requests list
+    description: Login successful, user is redirected to requests list
   401:
     description: Invalid email or password

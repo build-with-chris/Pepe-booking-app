@@ -17,32 +17,50 @@ parameters:
           type: string
         duration_minutes:
           type: integer
+        event_address:
+          type: string
         event_type:
           type: string
-        show_type:
-          type: string
+          enum:
+            - Private Feier
+            - Firmenfeier
+            - Incentive
+            - Streetshow
+        show_discipline:
+          type: array
+          items:
+            type: string
+            enum:
+              - Zauberer
+              - Cyr-Wheel
+              - Bodenakrobatik
+              - Luftakrobatik
+              - Partnerakrobatik
+              - Chinese Pole
+              - Hula Hoop
+              - Handstand
+              - Contemporary Dance
+              - Breakdance
+              - Teeterboard
+              - Jonglage
+              - Moderation
+              - Pantomime/Entertainment
         team_size:
           type: integer
         number_of_guests:
           type: integer
-        event_address:
-          type: string
         is_indoor:
           type: boolean
-        special_requests:
-          type: string
         needs_light:
           type: boolean
         needs_sound:
           type: boolean
-        needs_fog:
-          type: boolean
-        discipline:
-          type: string
-        distance_km:
-          type: number
         newsletter_opt_in:
           type: boolean
+        distance_km:
+          type: number
+        special_requests:
+          type: string
 responses:
   201:
     description: Booking request created with calculated price range

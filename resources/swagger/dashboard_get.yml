@@ -1,0 +1,9 @@
+tags:
+  - Admin
+summary: Admin dashboard page
+description: Renders an HTML dashboard for admin users.
+responses:
+  200:
+    description: HTML page with overview of availabilities and offers.
+  403:
+    description: Forbidden if user is not admin.

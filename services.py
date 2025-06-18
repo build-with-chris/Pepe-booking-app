@@ -4,8 +4,8 @@ def calculate_price(base_min, base_max,
                     distance_km, fee_pct, newsletter=False,
                     event_type='Private Feier', num_guests=0,
                     is_weekend=False, is_indoor=True,
-                    needs_light=False, needs_sound=False, needs_fog=False,
-                    show_type='stage_show', team_size='solo',
+                    needs_light=False, needs_sound=False,
+                    show_discipline='stage_show', team_size='solo',
                     duration=0, city=None):
     """
     Calculate a price range (min, max) by applying in order:
@@ -14,7 +14,7 @@ def calculate_price(base_min, base_max,
      3. Wochenend- oder Wochentag-Modifier
      4. Saison-/Feiertags-Modifier 
      5. Indoor vs. Outdoor
-     6. Technik-Pauschalen (Licht, Sound, Nebel)
+     6. Technik-Pauschalen (Licht, Sound)
      7. Basis-Agenturgebühr (fee_pct)
      8. Distanz-Zuschläge (ab 300 km +200 €, ab 600 km +300 €, München –100 €)
      9. Dauer- und Team-Validierung (Solo ≤15 min, Walking Act Basis 20 min)
@@ -54,7 +54,6 @@ def calculate_price(base_min, base_max,
     tech_fee = 0
     if needs_light: tech_fee += 50
     if needs_sound: tech_fee += 75
-    if needs_fog:   tech_fee += 30
 
     # 7. Agency fee
     min_p *= (1 + fee_pct/100)

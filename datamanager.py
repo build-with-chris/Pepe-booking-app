@@ -1,9 +1,41 @@
-from models import db, Artist, BookingRequest, Availability
+ALLOWED_DISCIPLINES = [
+    "Zauberer",
+    "Cyr-Wheel",
+    "Bodenakrobatik",
+    "Luftakrobatik",
+    "Partnerakrobatik",
+    "Chinese Pole",
+    "Hula Hoop",
+    "Handstand",
+    "Contemporary Dance",
+    "Breakdance",
+    "Teeterboard",
+    "Jonglage",
+    "Moderation",
+    "Pantomime/Entertainment"
+]
+
+ALLOWED_EVENT_TYPES = ['Private Feier', 'Firmenfeier', 'Incentive', 'Streetshow']
+from models import db, Artist, BookingRequest, Availability, Discipline
 from datetime import date, time
 
 class DataManager:
     def __init__(self):
         self.db = db
+
+    def get_or_create_discipline(self, name):
+        from models import Discipline
+        name = name.strip()
+        for allowed in ALLOWED_DISCIPLINES:
+            if allowed.lower() == name.lower():
+                name = allowed  # normalize to official spelling
+                break
+        disc = Discipline.query.filter_by(name=name).first()
+        if not disc:
+            disc = Discipline(name=name)
+            self.db.session.add(disc)
+            self.db.session.commit()
+        return disc
 
     # Artist methods
     def get_all_artists(self):
@@ -16,28 +48,39 @@ class DataManager:
     def get_artist_by_email(self, email):
         return Artist.query.filter_by(email=email).first()
 
-    def create_artist(self, name, email, password, discipline, phone_number=None, address=None, price_min=1500, price_max=1900, is_admin=False):
+    def create_artist(self, name, email, password, disciplines,
+                      phone_number=None, address=None,
+                      price_min=1500, price_max=1900, is_admin=False):
         artist = Artist(
             name=name,
             email=email,
-            discipline   = discipline,
             phone_number=phone_number,
             address=address,
             price_min=price_min,
             price_max=price_max,
             is_admin=is_admin,
-           
         )
-        artist.set_password(password) 
+        artist.set_password(password)
+        for disc_name in disciplines:
+            disc = self.get_or_create_discipline(disc_name)
+            artist.disciplines.append(disc)
         self.db.session.add(artist)
         self.db.session.commit()
         return artist
 
-    def get_artists_by_discipline(self, discipline):
+    def get_artists_by_discipline(self, disciplines):
         """
         Returns a list of Artist instances matching the given discipline.
         """
-        return Artist.query.filter_by(discipline=discipline).all()
+        if isinstance(disciplines, str):
+            disciplines = [disciplines]
+
+        return (
+            Artist.query
+            .join(Artist.disciplines)
+            .filter(Discipline.name.in_(disciplines))
+            .all()
+    )
 
     # BookingRequest methods
     def get_all_requests(self):
@@ -49,10 +92,10 @@ class DataManager:
     def create_request(self,
                        client_name, client_email,
                        event_date, duration_minutes,
-                       event_type, show_type, team_size,
+                       event_type, show_discipline, team_size,
                        number_of_guests, event_address,
                        is_indoor, special_requests,
-                       needs_light, needs_sound, needs_fog, 
+                       needs_light, needs_sound, 
                        artists, event_time="18:00",
                        distance_km=0.0, newsletter_opt_in=False):
         # event_date as date object or string 'YYYY-MM-DD'
@@ -60,28 +103,43 @@ class DataManager:
             event_date = date.fromisoformat(event_date)
         # event_time as string 'HH:MM'
         if isinstance(event_time, str):
-             event_time = time.fromisoformat(event_time)
+            event_time = time.fromisoformat(event_time)
+
+        # Normalize and validate event_type
+        if isinstance(event_type, str):
+            event_type_input = event_type.strip()
+            matched = next((e for e in ALLOWED_EVENT_TYPES 
+                            if e.lower() == event_type_input.lower()), None)
+            if matched:
+                event_type = matched
+            else:
+                raise ValueError(
+                    f"Invalid event_type: {event_type}. "
+                    f"Allowed: {ALLOWED_EVENT_TYPES}")
+        if not isinstance(show_discipline, list):
+            raise ValueError("show_discipline must be a list")
+        for disc in show_discipline:
+            if disc not in ALLOWED_DISCIPLINES:
+                raise ValueError(f"Invalid discipline: {disc}")
 
         request = BookingRequest(
             client_name       = client_name,
             client_email      = client_email,
-            event_date         = event_date,
-            event_time         = event_time,
-            duration_minutes   = duration_minutes,
-            event_type         = event_type,
-            show_type          = show_type,
-            team_size          = team_size,
-            number_of_guests   = number_of_guests,
-            event_address       = event_address,
-            is_indoor          = is_indoor,
-            special_requests   = special_requests,
-            needs_light        = needs_light,
-            needs_sound        = needs_sound,
-            needs_fog          = needs_fog,
-            distance_km        = distance_km,
-            newsletter_opt_in  = newsletter_opt_in
-         )
-   
+            event_date        = event_date,
+            event_time        = event_time,
+            duration_minutes  = duration_minutes,
+            event_type        = event_type,
+            show_discipline   = ", ".join(show_discipline),
+            team_size         = team_size,
+            number_of_guests  = number_of_guests,
+            event_address     = event_address,
+            is_indoor         = is_indoor,
+            special_requests  = special_requests,
+            needs_light       = needs_light,
+            needs_sound       = needs_sound,
+            distance_km       = distance_km,
+            newsletter_opt_in = newsletter_opt_in
+        )
         # associate artists
         for artist in artists:
             request.artists.append(artist)

@@ -19,8 +19,29 @@ parameters:
           type: string
         is_admin:
           type: boolean
-        discipline:
-          type: string
+        price_min:
+          type: integer
+        price_max:
+          type: integer
+        disciplines:
+          type: array
+          items:
+            type: string
+            enum:
+              - Zauberer
+              - Cyr-Wheel
+              - Bodenakrobatik
+              - Luftakrobatik
+              - Partnerakrobatik
+              - Chinese Pole
+              - Hula Hoop
+              - Handstand
+              - Contemporary Dance
+              - Breakdance
+              - Teeterboard
+              - Jonglage
+              - Moderation
+              - Pantomime/Entertainment
 responses:
   201:
     description: Artist created

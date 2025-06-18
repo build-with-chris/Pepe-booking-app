@@ -11,6 +11,20 @@ booking_artists = db.Table(
     db.Column('artist_id',  db.Integer, db.ForeignKey('artists.id'), primary_key=True)
 )
 
+
+# Association table for many-to-many between Artist and Discipline
+artist_disciplines = db.Table(
+    'artist_disciplines',
+    db.Column('artist_id', db.Integer, db.ForeignKey('artists.id'), primary_key=True),
+    db.Column('discipline_id', db.Integer, db.ForeignKey('disciplines.id'), primary_key=True)
+)
+
+# Discipline model
+class Discipline(db.Model):
+    __tablename__ = 'disciplines'
+    id   = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), unique=True, nullable=False)
+
 class Artist(UserMixin, db.Model):
     __tablename__ = 'artists'
     id             = db.Column(db.Integer, primary_key=True)
@@ -23,7 +37,12 @@ class Artist(UserMixin, db.Model):
     is_admin       = db.Column(db.Boolean, default=False)
     price_min      = db.Column(db.Integer, default=1500)
     price_max      = db.Column(db.Integer, default=1900)
-    discipline     = db.Column(db.String(50), nullable=False)  # e.g. Juggling, Magic, Music, Dance, etc.
+
+    disciplines    = db.relationship(
+        'Discipline',
+        secondary=artist_disciplines,
+        backref='artists'
+    )
 
     # Many-to-many relationship to BookingRequest
     bookings       = db.relationship(
@@ -46,7 +65,7 @@ class BookingRequest(db.Model):
 
     # NEU: Event-Daten
     event_type         = db.Column(db.String(50), nullable=False)   # Cooperate, Privat, Incentive, Streetshow
-    show_type          = db.Column(db.String(20), nullable=False)
+    show_discipline    = db.Column(db.String(20), nullable=False)
     team_size          = db.Column(db.String(10), nullable=False)   
     number_of_guests   = db.Column(db.Integer, nullable=True)       
     event_address      = db.Column(db.String(200), nullable=True)   
@@ -58,7 +77,6 @@ class BookingRequest(db.Model):
 
     needs_light        = db.Column(db.Boolean, default=False)
     needs_sound        = db.Column(db.Boolean, default=False)
-    needs_fog          = db.Column(db.Boolean, default=False)
 
     distance_km        = db.Column(db.Float, nullable=False, default=0.0)
     newsletter_opt_in  = db.Column(db.Boolean, default=False)

@@ -1,8 +1,10 @@
 tags:
-  - Requests
+  - Admin
+summary: List all booking requests (Admin only)
+description: Returns a full list of all booking requests in the system. Access restricted to admin users.
 responses:
   200:
-    description: List of booking requests for the current artist
+    description: A list of all booking requests
     schema:
       type: array
       items:
@@ -49,3 +51,5 @@ responses:
             type: array
             items:
               type: integer
+  403:
+    description: Forbidden - Only admins are allowed to access this endpoint

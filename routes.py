@@ -21,26 +21,34 @@ def list_artists():
         'name': a.name,
         'email': a.email,
         'phone_number': a.phone_number,
-        'discipline': a.discipline,
+        'disciplines': [d.name for d in a.disciplines],
     } for a in artists])
 
 @api_bp.route('/artists', methods=['POST'])
 @swag_from('resources/swagger/artists_post.yml')
 def create_artist():
     data = request.json
+    disciplines = data.get('disciplines')
+    if not disciplines:
+        return jsonify({'error': 'Disciplines must be provided!'}), 400
+
     artist = dm.create_artist(
-        name         = data['name'],
-        email        = data['email'],
-        password     = data['password'],
+        name=data['name'],
+        email=data['email'],
+        password=data['password'],
+        disciplines=disciplines,
         phone_number = data.get('phone_number'),
         address      = data.get('address'),
+        price_min=data.get('price_min', 1500),
+        price_max=data.get('price_max', 1900),
         is_admin     = data.get('is_admin'),
-        discipline   = data['discipline']
+        
     )
+
     # Set password if provided
     if 'password' in data:
         artist.set_password(data['password'])
-        db.session.commit()
+    db.session.commit()
     return jsonify({'id': artist.id}), 201
 
 @api_bp.route('/artists/<int:artist_id>', methods=['DELETE'])
@@ -77,7 +85,7 @@ def list_requests():
         'event_time':        r.event_time.isoformat() if r.event_time else None,
         'duration_minutes':  r.duration_minutes,
         'event_type':        r.event_type,
-        'show_type':         r.show_type,
+        'show_discipline':   r.show_discipline,
         'team_size':         r.team_size,
         'number_of_guests':  r.number_of_guests,
         'event_address':     r.event_address,
@@ -85,7 +93,7 @@ def list_requests():
         'special_requests':  r.special_requests,
         'needs_light':       r.needs_light,
         'needs_sound':       r.needs_sound,
-        'needs_fog':         r.needs_fog,
+        # 'needs_fog' removed
         'status':            r.status,
         'price_min':         r.price_min,
         'price_max':         r.price_max,
@@ -98,8 +106,8 @@ def list_requests():
 def create_request():
     data = request.json
     # Determine artists by discipline instead of explicit IDs, so the customer can choose just the discipline
-    discipline = data.get('discipline')
-    artist_objs = dm.get_artists_by_discipline(discipline)
+    disciplines = data.get('disciplines', [])
+    artist_objs = dm.get_artists_by_discipline(disciplines)
     req = dm.create_request(
         client_name       = data['client_name'],
         client_email      = data['client_email'],
@@ -107,7 +115,7 @@ def create_request():
         event_time        = data['event_time'],
         duration_minutes  = data['duration_minutes'],
         event_type        = data['event_type'],
-        show_type         = data['show_type'],
+        show_discipline   = disciplines,
         team_size         = data['team_size'],
         number_of_guests  = data['number_of_guests'],
         event_address     = data['event_address'],
@@ -115,36 +123,41 @@ def create_request():
         special_requests  = data.get('special_requests',''),
         needs_light       = data.get('needs_light', False),
         needs_sound       = data.get('needs_sound', False),
-        needs_fog         = data.get('needs_fog', False),
         artists           = artist_objs,
         distance_km       = data.get('distance_km', 0.0),
         newsletter_opt_in = data.get('newsletter_opt_in', False)
     )
     # Sum base prices
-    base_min = sum(a.price_min for a in req.artists)
-    base_max = sum(a.price_max for a in req.artists)
-    fee_pct = float(current_app.config.get("AGENCY_FEE_PERCENT", 20))
-    # Calculate and store
-    pmin, pmax = calculate_price(
-        base_min       = base_min,
-        base_max       = base_max,
-        distance_km    = req.distance_km,
-        fee_pct        = fee_pct,
-        newsletter     = req.newsletter_opt_in,
-        event_type     = req.event_type,
-        num_guests     = req.number_of_guests,
-        is_weekend     = req.event_date.weekday() >= 5,
-        is_indoor      = req.is_indoor,
-        needs_light    = req.needs_light,
-        needs_sound    = req.needs_sound,
-        needs_fog      = req.needs_fog,
-        show_type      = req.show_type,
-        team_size      = req.team_size,
-        duration       = req.duration_minutes,
-        city           = None  # optional: extract city from event_address
-    )
-    req.price_min = pmin
-    req.price_max = pmax
+    if not req.artists:
+        req.price_min = None
+        req.price_max = None
+        pmin = None
+        pmax = None
+    else:
+        base_min = sum(a.price_min for a in req.artists)
+        base_max = sum(a.price_max for a in req.artists)
+        fee_pct = float(current_app.config.get("AGENCY_FEE_PERCENT", 20))
+        # Calculate and store
+        pmin, pmax = calculate_price(
+            base_min       = base_min,
+            base_max       = base_max,
+            distance_km    = req.distance_km,
+            fee_pct        = fee_pct,
+            newsletter     = req.newsletter_opt_in,
+            event_type     = req.event_type,
+            num_guests     = req.number_of_guests,
+            is_weekend     = req.event_date.weekday() >= 5,
+            is_indoor      = req.is_indoor,
+            needs_light    = req.needs_light,
+            needs_sound    = req.needs_sound,
+            # needs_fog removed
+            show_discipline = req.show_discipline,
+            team_size      = req.team_size,
+            duration       = req.duration_minutes,
+            city           = None  # optional: extract city from event_address
+        )
+        req.price_min = pmin
+        req.price_max = pmax
     db.session.commit()
 
     return jsonify({
@@ -220,8 +233,42 @@ def remove_availability(slot_id):
 
 
 # Admin rights
+@api_bp.route('/requests/all', methods=['GET'])
+@login_required
+@swag_from('resources/swagger/requests_all_get.yml')
+def list_all_requests():
+    if not current_user.is_admin:
+        return jsonify({'error': 'Forbidden'}), 403
+
+    all_requests = dm.get_all_requests()
+    return jsonify([{
+        'id':                r.id,
+        'client_name':       r.client_name,
+        'client_email':      r.client_email,
+        'event_date':        r.event_date.isoformat(),
+        'event_time':        r.event_time.isoformat() if r.event_time else None,
+        'duration_minutes':  r.duration_minutes,
+        'event_type':        r.event_type,
+        'show_discipline':   r.show_discipline,
+        'team_size':         r.team_size,
+        'number_of_guests':  r.number_of_guests,
+        'event_address':     r.event_address,
+        'is_indoor':         r.is_indoor,
+        'special_requests':  r.special_requests,
+        'needs_light':       r.needs_light,
+        'needs_sound':       r.needs_sound,
+        'status':            r.status,
+        'price_min':         r.price_min,
+        'price_max':         r.price_max,
+        'price_offered':     r.price_offered,
+        'artist_ids': [a.id for a in r.artists]
+    } for r in all_requests])
+
+
 @admin_bp.route('/dashboard')
 @login_required
+@swag_from('resources/swagger/dashboard_get.yml')
+
 def dashboard():
     if not current_user.is_admin:
         return "Forbidden", 403
