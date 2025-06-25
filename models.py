@@ -1,6 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin 
+from datetime import datetime
 
 db = SQLAlchemy()
 
@@ -103,4 +104,25 @@ class Availability(db.Model):
     artist       = db.relationship(
         'Artist',
         backref=db.backref('availabilities', cascade='all, delete-orphan')
+    )
+
+
+# New model: AdminOffer
+class AdminOffer(db.Model):
+    __tablename__ = 'admin_offers'
+    id = db.Column(db.Integer, primary_key=True)
+    request_id = db.Column(db.Integer, db.ForeignKey('booking_requests.id'), nullable=False)
+    admin_id = db.Column(db.Integer, db.ForeignKey('artists.id'), nullable=False)
+    override_price = db.Column(db.Integer, nullable=False)
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    request = db.relationship(
+        'BookingRequest',
+        backref=db.backref('admin_offers', cascade='all, delete-orphan')
+    )
+    admin = db.relationship(
+        'Artist',
+        backref=db.backref('admin_offers', cascade='all, delete-orphan')
     )

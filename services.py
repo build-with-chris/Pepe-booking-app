@@ -51,6 +51,11 @@ def calculate_price(base_min, base_max,
         min_p *= 1.15
         max_p *= 1.15
 
+    # 4. Newsletter discount (5%)
+    if newsletter:
+        min_p *= 0.95
+        max_p *= 0.95
+
     # 5. Indoor/Outdoor
     if not is_indoor:
         min_p *= 1.2

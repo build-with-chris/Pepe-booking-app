@@ -1,0 +1,36 @@
+tags:
+  - AdminOffers
+description: |
+  Legt ein neues Admin-Angebot für eine Booking-Request an.
+parameters:
+  - name: req_id
+    in: path
+    required: true
+    type: integer
+    description: ID der Booking-Anfrage
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      required:
+        - override_price
+      properties:
+        override_price:
+          type: integer
+          description: Manuell festgelegter Gesamtpreis
+        notes:
+          type: string
+          description: Optionaler Kommentar zum Angebot
+responses:
+  201:
+    description: Admin-Angebot erfolgreich erstellt
+    schema:
+      type: object
+      properties:
+        id:
+          type: integer
+  400:
+    description: Bad Request – override_price fehlt
+  403:
+    description: Forbidden – nur Admins dürfen

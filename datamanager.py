@@ -5,7 +5,7 @@ ALLOWED_STATUSES = [
     "abgelehnt",
     "storniert"
 ]
-from models import db, Artist, BookingRequest, Availability, Discipline, booking_artists
+from models import db, Artist, BookingRequest, Availability, Discipline, booking_artists, AdminOffer
 from services import calculate_price
 from flask import current_app
 from datetime import date, time
@@ -204,11 +204,51 @@ class DataManager:
             # Solo-Booking: direktes Angebot der einzelnen Gage
             req.price_offered = price_offered
             req.status = "angeboten"
+                        # Recalculate final price including agency fee, tech, etc.
+            raw = req.price_offered
+            min_p, _ = calculate_price(
+                base_min       = raw,
+                base_max       = raw,
+                distance_km    = req.distance_km,
+                fee_pct        = float(current_app.config.get("AGENCY_FEE_PERCENT", 20)),
+                newsletter     = req.newsletter_opt_in,
+                event_type     = None,
+                num_guests     = 100,
+                is_weekend     = False,
+                is_indoor      = True,
+                needs_light    = req.needs_light,
+                needs_sound    = req.needs_sound,
+                show_discipline= req.show_discipline,
+                team_size      = req.team_size,
+                duration       = req.duration_minutes,
+                city           = None
+            )
+            req.price_offered = min_p
         elif all(g is not None for g in gages):
             # Duo+ : nur, wenn alle ihre Gage abgegeben haben
             total = sum(g for g in gages if g is not None)
             req.price_offered = total
             req.status = "angeboten"
+                        # Recalculate final price including agency fee, tech, etc.
+            raw = req.price_offered
+            min_p, _ = calculate_price(
+                base_min       = raw,
+                base_max       = raw,
+                distance_km    = req.distance_km,
+                fee_pct        = float(current_app.config.get("AGENCY_FEE_PERCENT", 20)),
+                newsletter     = req.newsletter_opt_in,
+                event_type     = None,
+                num_guests     = 100,
+                is_weekend     = False,
+                is_indoor      = True,
+                needs_light    = req.needs_light,
+                needs_sound    = req.needs_sound,
+                show_discipline= req.show_discipline,
+                team_size      = req.team_size,
+                duration       = req.duration_minutes,
+                city           = None
+            )
+            req.price_offered = min_p
         self.db.session.commit()
         return req
 
@@ -312,3 +352,40 @@ class DataManager:
                 'recommended_price_max': rec_max
             })
         return result
+
+    # AdminOffer methods
+    def get_admin_offers(self, request_id):
+        return AdminOffer.query.filter_by(request_id=request_id).all()
+
+    def get_admin_offer(self, offer_id):
+        return AdminOffer.query.get(offer_id)
+
+    def create_admin_offer(self, request_id, admin_id, override_price, notes=None):
+        offer = AdminOffer(
+            request_id=request_id,
+            admin_id=admin_id,
+            override_price=override_price,
+            notes=notes
+        )
+        self.db.session.add(offer)
+        self.db.session.commit()
+        return offer
+
+    def update_admin_offer(self, offer_id, override_price=None, notes=None):
+        offer = self.get_admin_offer(offer_id)
+        if not offer:
+            return None
+        if override_price is not None:
+            offer.override_price = override_price
+        if notes is not None:
+            offer.notes = notes
+        self.db.session.commit()
+        return offer
+
+    def delete_admin_offer(self, offer_id):
+        offer = self.get_admin_offer(offer_id)
+        if not offer:
+            return False
+        self.db.session.delete(offer)
+        self.db.session.commit()
+        return True

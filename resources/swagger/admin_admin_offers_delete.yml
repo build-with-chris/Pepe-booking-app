@@ -1,0 +1,23 @@
+tags:
+  - AdminOffers
+description: |
+  Löscht ein Admin-Angebot.
+parameters:
+  - name: offer_id
+    in: path
+    required: true
+    type: integer
+    description: ID des Admin-Angebots
+responses:
+  200:
+    description: Admin-Angebot gelöscht
+    schema:
+      type: object
+      properties:
+        deleted:
+          type: integer
+          description: ID des gelöschten Angebots
+  403:
+    description: Forbidden – nur Admins dürfen
+  404:
+    description: Not Found – Angebot existiert nicht

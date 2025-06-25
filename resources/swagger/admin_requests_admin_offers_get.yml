@@ -1,0 +1,33 @@
+tags:
+  - AdminOffers
+description: |
+  Listet alle Admin-Angebote für eine bestimmte Booking-Request.
+parameters:
+  - name: req_id
+    in: path
+    required: true
+    type: integer
+    description: ID der Booking-Anfrage
+responses:
+  200:
+    description: Array mit allen Admin-Angeboten
+    schema:
+      type: array
+      items:
+        type: object
+        properties:
+          id:
+            type: integer
+          request_id:
+            type: integer
+          admin_id:
+            type: integer
+          override_price:
+            type: integer
+          notes:
+            type: string
+          created_at:
+            type: string
+            format: date-time
+  403:
+    description: Forbidden – nur Admins dürfen

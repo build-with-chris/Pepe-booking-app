@@ -236,7 +236,7 @@ def set_offer(req_id):
 
     # Bei Solo-Booking sofort das eigene Angebot zurückgeben
     if req.team_size == 1:
-        return jsonify({'status': req.status, 'price_offered': artist_gage})
+        return jsonify({'status': req.status, 'price_offered': req.price_offered})
     # Bei Duo+ erst Preis, wenn alle offeriert haben
     elif req.price_offered is not None:
         return jsonify({'status': req.status, 'price_offered': req.price_offered})
@@ -325,6 +325,65 @@ def list_all_requests():
         'artist_ids': [a.id for a in r.artists]
     } for r in all_requests])
 
+# AdminOffer CRUD
+@swag_from('resources/swagger/admin_requests_admin_offers_get.yml')
+@login_required
+@admin_bp.route('/requests/<int:req_id>/admin_offers', methods=['GET'])
+def list_admin_offers(req_id):
+    if not current_user.is_admin:
+        return jsonify({'error': 'Forbidden'}), 403
+    offers = dm.get_admin_offers(req_id)
+    return jsonify([{
+        'id': o.id,
+        'request_id': o.request_id,
+        'admin_id': o.admin_id,
+        'override_price': o.override_price,
+        'notes': o.notes,
+        'created_at': o.created_at.isoformat()
+    } for o in offers])
+
+@swag_from('resources/swagger/admin_requests_admin_offers_post.yml')
+@login_required
+@admin_bp.route('/requests/<int:req_id>/admin_offers', methods=['POST'])
+def create_admin_offer(req_id):
+    if not current_user.is_admin:
+        return jsonify({'error': 'Forbidden'}), 403
+    data = request.json
+    price = data.get('override_price')
+    if price is None:
+        return jsonify({'error': 'override_price is required'}), 400
+    notes = data.get('notes')
+    offer = dm.create_admin_offer(req_id, current_user.id, price, notes)
+    return jsonify({'id': offer.id}), 201
+
+@swag_from('resources/swagger/admin_admin_offers_put.yml')
+@login_required
+@admin_bp.route('/admin_offers/<int:offer_id>', methods=['PUT'])
+def update_admin_offer(offer_id):
+    if not current_user.is_admin:
+        return jsonify({'error': 'Forbidden'}), 403
+    data = request.json
+    price = data.get('override_price')
+    notes = data.get('notes')
+    offer = dm.update_admin_offer(offer_id, price, notes)
+    if not offer:
+        return jsonify({'error': 'Not found'}), 404
+    return jsonify({
+        'id': offer.id,
+        'override_price': offer.override_price,
+        'notes': offer.notes
+    })
+
+@swag_from('resources/swagger/admin_admin_offers_delete.yml')
+@login_required
+@admin_bp.route('/admin_offers/<int:offer_id>', methods=['DELETE'])
+def delete_admin_offer(offer_id):
+    if not current_user.is_admin:
+        return jsonify({'error': 'Forbidden'}), 403
+    success = dm.delete_admin_offer(offer_id)
+    if not success:
+        return jsonify({'error': 'Not found'}), 404
+    return jsonify({'deleted': offer_id})
 
 @admin_bp.route('/dashboard')
 @login_required

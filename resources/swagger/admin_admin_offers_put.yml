@@ -1,0 +1,38 @@
+tags:
+  - AdminOffers
+description: |
+  Aktualisiert ein bestehendes Admin-Angebot.
+parameters:
+  - name: offer_id
+    in: path
+    required: true
+    type: integer
+    description: ID des Admin-Angebots
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      properties:
+        override_price:
+          type: integer
+          description: Neuer Gesamtpreis (optional)
+        notes:
+          type: string
+          description: Aktualisierte Notiz (optional)
+responses:
+  200:
+    description: Admin-Angebot erfolgreich aktualisiert
+    schema:
+      type: object
+      properties:
+        id:
+          type: integer
+        override_price:
+          type: integer
+        notes:
+          type: string
+  403:
+    description: Forbidden – nur Admins dürfen
+  404:
+    description: Not Found – Angebot existiert nicht
