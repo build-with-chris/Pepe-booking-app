@@ -73,40 +73,36 @@ def delete_artist(artist_id):
 @login_required
 @swag_from('resources/swagger/requests_get.yml')
 def list_requests():
-    # Only show requests for this artist
-    all_reqs = dm.get_all_requests()
-    # Filter: only those including current_user
-    reqs = [r for r in all_reqs if current_user in r.artists]
-    return jsonify([{
-        'id':                r.id,
-        'client_name':       r.client_name,
-        'client_email':      r.client_email,
-        'event_date':        r.event_date.isoformat(),
-        'event_time':        r.event_time.isoformat() if r.event_time else None,
-        'duration_minutes':  r.duration_minutes,
-        'event_type':        r.event_type,
-        'show_discipline':   r.show_discipline,
-        'team_size':         r.team_size,
-        'number_of_guests':  r.number_of_guests,
-        'event_address':     r.event_address,
-        'is_indoor':         r.is_indoor,
-        'special_requests':  r.special_requests,
-        'needs_light':       r.needs_light,
-        'needs_sound':       r.needs_sound,
-        'status':            r.status,
-        'price_min':         r.price_min,
-        'price_max':         r.price_max,
-        'price_offered':     r.price_offered,
-        'artist_ids': [a.id for a in r.artists]
-    } for r in reqs])
+    # Liefere persönliche Empfehlungen für den eingeloggten Artist
+    result = dm.get_requests_for_artist_with_recommendation(current_user.id)
+    return jsonify(result)
 
 @api_bp.route('/requests', methods=['POST'])
 @swag_from('resources/swagger/requests_post.yml')
 def create_request():
     data = request.json
-    # Determine artists by discipline instead of explicit IDs, so the customer can choose just the discipline
-    disciplines = data.get('show_discipline', [])
-    artist_objs = dm.get_artists_by_discipline(disciplines)
+    # Normalize team_size: accept numeric or strings "solo"/"duo"
+    raw_team_size = data.get('team_size')
+    if isinstance(raw_team_size, str):
+        ts_lower = raw_team_size.strip().lower()
+        if ts_lower == 'solo':
+            team_size = 1
+        elif ts_lower == 'duo':
+            team_size = 2
+        elif ts_lower in ('group', 'gruppe'):
+            team_size = 3
+            # simplified, because we don't calculate pmin or pmax for more than 2 people
+        else:
+            try:
+                team_size = int(raw_team_size)
+            except ValueError:
+                return jsonify({'error': 'Invalid team_size'}), 400
+    else:
+        team_size = raw_team_size
+    # Einheitlicher Key: 'disciplines'
+    disciplines = data.get('disciplines', [])
+    event_date = data['event_date']
+    artist_objs = dm.get_artists_by_discipline(disciplines, event_date)
     req = dm.create_request(
         client_name       = data['client_name'],
         client_email      = data['client_email'],
@@ -114,8 +110,8 @@ def create_request():
         event_time        = data['event_time'],
         duration_minutes  = data['duration_minutes'],
         event_type        = data['event_type'],
-        show_discipline   = data['show_discipline'],
-        team_size         = data['team_size'],
+        show_discipline   = disciplines,  # hier auch korrekt!
+        team_size         = team_size,
         number_of_guests  = data['number_of_guests'],
         event_address     = data['event_address'],
         is_indoor         = data['is_indoor'],
@@ -133,28 +129,50 @@ def create_request():
         pmin = None
         pmax = None
     else:
-        base_min = sum(a.price_min for a in req.artists)
-        base_max = sum(a.price_max for a in req.artists)
         fee_pct = float(current_app.config.get("AGENCY_FEE_PERCENT", 20))
-        # Calculate and store
-        pmin, pmax = calculate_price(
-            base_min       = base_min,
-            base_max       = base_max,
-            distance_km    = req.distance_km,
-            fee_pct        = fee_pct,
-            newsletter     = req.newsletter_opt_in,
-            event_type     = req.event_type,
-            num_guests     = req.number_of_guests,
-            is_weekend     = req.event_date.weekday() >= 5,
-            is_indoor      = req.is_indoor,
-            needs_light    = req.needs_light,
-            needs_sound    = req.needs_sound,
-            # needs_fog removed
-            show_discipline = req.show_discipline,
-            team_size      = req.team_size,
-            duration       = req.duration_minutes,
-            city           = None  # optional: extract city from event_address
-        )
+        # Travel fee only if at least one artist from a different city
+        event_city = data.get('event_address', '').split(',')[-1].strip().lower()
+        external_artists = [
+            a for a in artist_objs
+            if a.address and event_city not in a.address.lower()
+        ]
+        travel_distance = req.distance_km if external_artists else 0.0
+
+        # Determine base_min/base_max by team size
+        if team_size == 1:
+            base_min = min(a.price_min for a in artist_objs)
+            base_max = max(a.price_max for a in artist_objs)
+        elif team_size == 2:
+            sorted_by_min = sorted(artist_objs, key=lambda a: a.price_min)
+            sorted_by_max = sorted(artist_objs, key=lambda a: a.price_max, reverse=True)
+            base_min = sum(a.price_min for a in sorted_by_min[:2])
+            base_max = sum(a.price_max for a in sorted_by_max[:2])
+        else:
+            base_min = base_max = None
+
+        # Calculate price if solo or duo, else manual review
+        if base_min is not None:
+            args = {
+                'base_min': base_min,
+                'base_max': base_max,
+                'distance_km': travel_distance,
+                'fee_pct': fee_pct,
+                'newsletter': req.newsletter_opt_in,
+                'event_type': req.event_type,
+                'num_guests': req.number_of_guests,
+                'is_weekend': req.event_date.weekday() >= 5,
+                'is_indoor': req.is_indoor,
+                'needs_light': req.needs_light,
+                'needs_sound': req.needs_sound,
+                'show_discipline': req.show_discipline,
+                'team_size': team_size,
+                'duration': req.duration_minutes,
+                'city': None
+            }
+            pmin, pmax = calculate_price(**args)
+        else:
+            pmin = pmax = None
+
         req.price_min = pmin
         req.price_max = pmax
     db.session.commit()
@@ -162,7 +180,8 @@ def create_request():
     return jsonify({
         'request_id': req.id,
         'price_min': pmin,
-        'price_max': pmax
+        'price_max': pmax,
+        'num_available_artists': len(artist_objs)
     }), 201
 
 @api_bp.route('/requests/<int:req_id>/offer', methods=['PUT'])
@@ -173,13 +192,56 @@ def set_offer(req_id):
     if not req or (current_user.id not in [a.id for a in req.artists]
                    and not current_user.is_admin):
         return jsonify({'error':'Not allowed'}), 403
+
     data = request.json
-    price = data.get('price_offered')
-    dm.set_offer(req_id, price)
-    # notify artists
+    artist_gage = data.get('artist_gage')
+    if artist_gage is None:
+        return jsonify({'error': 'artist_gage is required'}), 400
+
+    # Berechne neue Basis: Ersetze nur die Gage des aktuellen Artists
+    base_min = sum(
+        artist_gage if a.id == current_user.id else a.price_min
+        for a in req.artists
+    )
+    base_max = sum(
+        artist_gage if a.id == current_user.id else a.price_max
+        for a in req.artists
+    )
+
+    fee_pct = float(current_app.config.get("AGENCY_FEE_PERCENT", 20))
+    pmin, pmax = calculate_price(
+        base_min       = base_min,
+        base_max       = base_max,
+        distance_km    = req.distance_km,
+        fee_pct        = fee_pct,
+        newsletter     = req.newsletter_opt_in,
+        event_type     = req.event_type,
+        num_guests     = req.number_of_guests,
+        is_weekend     = req.event_date.weekday() >= 5,
+        is_indoor      = req.is_indoor,
+        needs_light    = req.needs_light,
+        needs_sound    = req.needs_sound,
+        show_discipline = req.show_discipline,
+        team_size      = req.team_size,
+        duration       = req.duration_minutes,
+        city           = None
+    )
+
+    # Speichere das neue Angebot
+    req = dm.set_offer(req_id, current_user.id, artist_gage)
+
+    # Benachrichtige Artists
     for artist in req.artists:
-        send_push(artist, f'New offer: {price} EUR for request {req_id}')
-    return jsonify({'status':'offered'})
+        send_push(artist, f'New offer: {pmax} EUR for request {req_id}')
+
+    # Bei Solo-Booking sofort das eigene Angebot zurückgeben
+    if req.team_size == 1:
+        return jsonify({'status': req.status, 'price_offered': artist_gage})
+    # Bei Duo+ erst Preis, wenn alle offeriert haben
+    elif req.price_offered is not None:
+        return jsonify({'status': req.status, 'price_offered': req.price_offered})
+    else:
+        return jsonify({'status': req.status}), 200
 
 def send_push(artist, message):
     current_app.logger.info(f"PUSH to {artist.id}: {message}")

@@ -8,7 +8,8 @@ db = SQLAlchemy()
 booking_artists = db.Table(
     'booking_artists',
     db.Column('booking_id', db.Integer, db.ForeignKey('booking_requests.id'), primary_key=True),
-    db.Column('artist_id',  db.Integer, db.ForeignKey('artists.id'), primary_key=True)
+    db.Column('artist_id',  db.Integer, db.ForeignKey('artists.id'), primary_key=True),
+    db.Column('offered_gage', db.Integer, nullable=True)
 )
 
 

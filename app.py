@@ -32,9 +32,8 @@ template = {
 }
 }
 app.config['SWAGGER'] = {
-'title': "Pepe Backend API",
-'uiversion': 2,
-'template': './resources/flasgger/swagger_ui.html'
+    'title': "Pepe Backend API",
+    'uiversion': 2
 }
 Swagger(app, template=template)
 

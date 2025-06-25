@@ -1,4 +1,13 @@
-from models import db, Artist, BookingRequest, Availability, Discipline
+ALLOWED_STATUSES = [
+    "angefragt",
+    "angeboten",
+    "akzeptiert",
+    "abgelehnt",
+    "storniert"
+]
+from models import db, Artist, BookingRequest, Availability, Discipline, booking_artists
+from services import calculate_price
+from flask import current_app
 from datetime import date, time
 
 ALLOWED_DISCIPLINES = [
@@ -174,17 +183,38 @@ class DataManager:
         self.db.session.commit()
         return request
 
-    def set_offer(self, request_id, price_offered):
+    def set_offer(self, request_id, artist_id, price_offered):
+        # 1. Store the artist's offered gage in the association table
+        self.db.session.execute(
+            booking_artists.update()
+                .where(booking_artists.c.booking_id == request_id)
+                .where(booking_artists.c.artist_id == artist_id)
+                .values(offered_gage=price_offered)
+        )
+        # 2. Check if all artists have submitted their gage
+        rows = self.db.session.execute(
+            booking_artists.select().with_only_columns(booking_artists.c.offered_gage)
+                .where(booking_artists.c.booking_id == request_id)
+        ).fetchall()
+        gages = [r[0] for r in rows]
+        # Finalisiere sofort bei Solo-Booking (team_size '1') oder wenn alle Artists offeriert haben
         req = self.get_request(request_id)
-        if req:
+        # Finalisiere sofort bei Solo-Booking (team_size '1') oder wenn alle Artists offeriert haben
+        if int(req.team_size) == 1:
+            # Solo-Booking: direktes Angebot der einzelnen Gage
             req.price_offered = price_offered
-            req.status = 'offered'
-            self.db.session.commit()
+            req.status = "angeboten"
+        elif all(g is not None for g in gages):
+            # Duo+ : nur, wenn alle ihre Gage abgegeben haben
+            total = sum(g for g in gages if g is not None)
+            req.price_offered = total
+            req.status = "angeboten"
+        self.db.session.commit()
         return req
 
     def change_status(self, request_id, status):
         req = self.get_request(request_id)
-        if req and status in ['requested', 'offered', 'accepted', 'declined']:
+        if req and status in ALLOWED_STATUSES:
             req.status = status
             self.db.session.commit()
         return req
@@ -233,3 +263,52 @@ class DataManager:
         gesetzt wurde (price_offered != None).
         """
         return BookingRequest.query.filter(BookingRequest.price_offered.isnot(None)).all()
+
+    def get_requests_for_artist_with_recommendation(self, artist_id):
+        # Get the artist object for base rates
+        artist = self.get_artist(artist_id)
+        # Find all requests involving this artist
+        reqs = [r for r in self.get_all_requests() if any(a.id == artist_id for a in r.artists)]
+        result = []
+        for r in reqs:
+            # Calculate recommended price based on the artist's own rates, EXCLUDING agency fee and extras
+            rec_min, rec_max = calculate_price(
+                base_min       = artist.price_min,
+                base_max       = artist.price_max,
+                distance_km    = 0,
+                fee_pct        = 0,
+                newsletter     = False,
+                event_type     = r.event_type,
+                num_guests     = r.number_of_guests,
+                is_weekend     = r.event_date.weekday() >= 5,
+                is_indoor      = r.is_indoor,
+                needs_light    = False,
+                needs_sound    = False,
+                show_discipline= r.show_discipline,
+                team_size      = 1,
+                duration       = r.duration_minutes,
+                city           = None
+            )
+            # Build response for this request
+            result.append({
+                'id': r.id,
+                'client_name': r.client_name,
+                'client_email': r.client_email,
+                'event_date': r.event_date.isoformat(),
+                'event_time': r.event_time.isoformat() if r.event_time else None,
+                'duration_minutes': r.duration_minutes,
+                'event_type': r.event_type,
+                'show_discipline': r.show_discipline,
+                'team_size': r.team_size,
+                'number_of_guests': r.number_of_guests,
+                'event_address': r.event_address,
+                'is_indoor': r.is_indoor,
+                'special_requests': r.special_requests,
+                'needs_light': r.needs_light,
+                'needs_sound': r.needs_sound,
+                'status': r.status,
+                'artist_ids': [a.id for a in r.artists],
+                'recommended_price_min': rec_min,
+                'recommended_price_max': rec_max
+            })
+        return result

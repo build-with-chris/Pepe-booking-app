@@ -26,7 +26,13 @@ def calculate_price(base_min, base_max,
         'Incentive':     1.05,
         'Streetshow':    0.9
     }
-    w_event = event_weights.get(event_type, 1.0)
+    # Verhindere Untergewichtung bei Private Feier, wenn Gage manuell kommt
+    if base_min == base_max:
+        # Fixweight: Private Feier darf nicht abschwächen
+        w_event = max(event_weights.get(event_type, 1.0), 1.0)
+    else:
+        w_event = event_weights.get(event_type, 1.0)
+
     min_p = base_min * w_event
     max_p = base_max * w_event
 
