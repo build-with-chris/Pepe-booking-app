@@ -326,9 +326,10 @@ def list_all_requests():
     } for r in all_requests])
 
 # AdminOffer CRUD
-@swag_from('resources/swagger/admin_requests_admin_offers_get.yml')
 @login_required
 @admin_bp.route('/requests/<int:req_id>/admin_offers', methods=['GET'])
+@swag_from('resources/swagger/admin_requests_admin_offers_get.yml')
+
 def list_admin_offers(req_id):
     if not current_user.is_admin:
         return jsonify({'error': 'Forbidden'}), 403
@@ -342,9 +343,9 @@ def list_admin_offers(req_id):
         'created_at': o.created_at.isoformat()
     } for o in offers])
 
-@swag_from('resources/swagger/admin_requests_admin_offers_post.yml')
 @login_required
 @admin_bp.route('/requests/<int:req_id>/admin_offers', methods=['POST'])
+@swag_from('resources/swagger/admin_requests_admin_offers_post.yml')
 def create_admin_offer(req_id):
     if not current_user.is_admin:
         return jsonify({'error': 'Forbidden'}), 403
@@ -356,9 +357,9 @@ def create_admin_offer(req_id):
     offer = dm.create_admin_offer(req_id, current_user.id, price, notes)
     return jsonify({'id': offer.id}), 201
 
-@swag_from('resources/swagger/admin_admin_offers_put.yml')
 @login_required
 @admin_bp.route('/admin_offers/<int:offer_id>', methods=['PUT'])
+@swag_from('resources/swagger/admin_admin_offers_put.yml')
 def update_admin_offer(offer_id):
     if not current_user.is_admin:
         return jsonify({'error': 'Forbidden'}), 403
@@ -374,9 +375,9 @@ def update_admin_offer(offer_id):
         'notes': offer.notes
     })
 
-@swag_from('resources/swagger/admin_admin_offers_delete.yml')
 @login_required
 @admin_bp.route('/admin_offers/<int:offer_id>', methods=['DELETE'])
+@swag_from('resources/swagger/admin_admin_offers_delete.yml')
 def delete_admin_offer(offer_id):
     if not current_user.is_admin:
         return jsonify({'error': 'Forbidden'}), 403

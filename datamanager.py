@@ -189,11 +189,11 @@ class DataManager:
             booking_artists.update()
                 .where(booking_artists.c.booking_id == request_id)
                 .where(booking_artists.c.artist_id == artist_id)
-                .values(offered_gage=price_offered)
+                .values(requested_gage=price_offered)
         )
         # 2. Check if all artists have submitted their gage
         rows = self.db.session.execute(
-            booking_artists.select().with_only_columns(booking_artists.c.offered_gage)
+            booking_artists.select().with_only_columns(booking_artists.c.requested_gage)
                 .where(booking_artists.c.booking_id == request_id)
         ).fetchall()
         gages = [r[0] for r in rows]
