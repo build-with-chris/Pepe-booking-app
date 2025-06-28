@@ -77,7 +77,7 @@ def calculate_price(base_min, base_max,
     elif distance_km >= 300:
         surcharge += 200
     # München-Rabatt
-    if city and city.lower() == 'münchen':
+    if city and city.lower() == ('münchen', 'muenchen', 'munich'):
         surcharge -= 100
 
     # 9. Travel fee
