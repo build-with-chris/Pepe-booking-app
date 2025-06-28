@@ -1,9 +1,9 @@
 from flask import current_app
 from flask import Blueprint, request, jsonify, render_template
 from flask_login import login_required, current_user
-from datamanager import DataManager
-from services import calculate_price
-from models import db
+from pepebooking.datamanager import DataManager
+from pepebooking.services import calculate_price
+from pepebooking.models import db
 from flasgger import swag_from
 
 api_bp = Blueprint('api', __name__)

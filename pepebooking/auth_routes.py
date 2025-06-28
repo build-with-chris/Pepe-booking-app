@@ -1,7 +1,7 @@
 # auth_routes.py
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_user, logout_user, login_required, current_user
-from datamanager import DataManager
+from pepebooking.datamanager import DataManager
 from flasgger import swag_from
 
 auth_bp = Blueprint('auth', __name__, template_folder='templates')

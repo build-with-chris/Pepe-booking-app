@@ -1,10 +1,10 @@
 from flask import Flask
 from config import Config
-from models import db
-from routes import api_bp, admin_bp
+from pepebooking.models import db
+from pepebooking.routes import api_bp, admin_bp
 from flask_jwt_extended import JWTManager
 from flask_login import LoginManager
-from auth_routes import auth_bp
+from pepebooking.auth_routes import auth_bp
 from flasgger import Swagger
 from flask_cors import CORS
 
@@ -17,7 +17,7 @@ login_manager.login_view = 'auth.login'
 
 @login_manager.user_loader
 def load_user(user_id):
-    from datamanager import DataManager
+    from pepebooking.datamanager import DataManager
     return DataManager().get_artist(user_id)
 
 jwt = JWTManager(app)

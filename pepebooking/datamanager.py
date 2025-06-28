@@ -5,8 +5,8 @@ ALLOWED_STATUSES = [
     "abgelehnt",
     "storniert"
 ]
-from models import db, Artist, BookingRequest, Availability, Discipline, booking_artists, AdminOffer
-from services import calculate_price
+from pepebooking.models import db, Artist, BookingRequest, Availability, Discipline, booking_artists, AdminOffer
+from pepebooking.services import calculate_price
 from flask import current_app
 from datetime import date, time
 
@@ -35,7 +35,7 @@ class DataManager:
         self.db = db
 
     def get_or_create_discipline(self, name):
-        from models import Discipline
+        from pepebooking.models import Discipline
         name = name.strip()
         for allowed in ALLOWED_DISCIPLINES:
             if allowed.lower() == name.lower():
