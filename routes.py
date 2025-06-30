@@ -1,14 +1,42 @@
-from flask import current_app
-from flask import Blueprint, request, jsonify, render_template
-from flask_login import login_required, current_user
+from flask import current_app, request, jsonify
+from flask import Blueprint, render_template
 from datamanager import DataManager
 from services import calculate_price
 from models import db
 from flasgger import swag_from
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 
 api_bp = Blueprint('api', __name__)
 admin_bp = Blueprint('admin', __name__, template_folder='templates')
+auth_bp = Blueprint('auth', __name__)
 dm = DataManager()
+
+def get_current_user():
+    """
+    Returns a tuple (user_id, user) for the currently authenticated JWT user.
+    """
+    user_id = get_jwt_identity()
+    user = dm.get_artist(user_id)
+    return user_id, user
+
+#auth-route
+@auth_bp.route('/login', methods=['POST'])
+def login():
+    data = request.get_json() or {}
+    email = data.get('email')
+    pw = data.get('password')
+    artist = dm.get_artist_by_email(email)
+    if artist and artist.check_password(pw):
+        token = create_access_token(identity=artist.id)
+        return jsonify(access_token=token,
+                       user={'id': artist.id, 'email': artist.email}), 200
+    return jsonify({"msg": "Invalid credentials"}), 401
+
+
+@auth_bp.route('/logout')
+def logout():
+    # Logout functionality remains unchanged
+    pass
 
 
 # Artists
@@ -52,29 +80,31 @@ def create_artist():
     return jsonify({'id': artist.id}), 201
 
 @api_bp.route('/artists/<int:artist_id>', methods=['DELETE'])
-@login_required
+@jwt_required()
 @swag_from('resources/swagger/artists_delete.yml')
 def delete_artist(artist_id):
+    user_id = get_jwt_identity()
     # nur der eingeloggte Artist darf sich selbst löschen
-    if current_user.id != artist_id:
+    if user_id != artist_id:
         return jsonify({'error':'Forbidden'}), 403
 
     success = dm.delete_artist(artist_id)
     if success:
         # und gleich ausloggen
-        from flask_login import logout_user
-        logout_user()
+        # from flask_login import logout_user
+        # logout_user()
         return jsonify({'deleted': artist_id}), 200
 
     return jsonify({'error':'Not found'}), 404
 
 # Booking Requests
 @api_bp.route('/requests', methods=['GET'])
-@login_required
+@jwt_required()
 @swag_from('resources/swagger/requests_get.yml')
 def list_requests():
+    user_id = get_jwt_identity()
     # Liefere persönliche Empfehlungen für den eingeloggten Artist
-    result = dm.get_requests_for_artist_with_recommendation(current_user.id)
+    result = dm.get_requests_for_artist_with_recommendation(user_id)
     return jsonify(result)
 
 @api_bp.route('/requests', methods=['POST'])
@@ -185,12 +215,13 @@ def create_request():
     }), 201
 
 @api_bp.route('/requests/<int:req_id>/offer', methods=['PUT'])
-@login_required
+@jwt_required()
 @swag_from('resources/swagger/requests_offer_put.yml')
 def set_offer(req_id):
+    user_id, user = get_current_user()
     req = dm.get_request(req_id)
-    if not req or (current_user.id not in [a.id for a in req.artists]
-                   and not current_user.is_admin):
+    if not req or (user_id not in [a.id for a in req.artists]
+                   and not user.is_admin):
         return jsonify({'error':'Not allowed'}), 403
 
     data = request.json
@@ -200,11 +231,11 @@ def set_offer(req_id):
 
     # Berechne neue Basis: Ersetze nur die Gage des aktuellen Artists
     base_min = sum(
-        artist_gage if a.id == current_user.id else a.price_min
+        artist_gage if a.id == user_id else a.price_min
         for a in req.artists
     )
     base_max = sum(
-        artist_gage if a.id == current_user.id else a.price_max
+        artist_gage if a.id == user_id else a.price_max
         for a in req.artists
     )
 
@@ -228,7 +259,7 @@ def set_offer(req_id):
     )
 
     # Speichere das neue Angebot
-    req = dm.set_offer(req_id, current_user.id, artist_gage)
+    req = dm.set_offer(req_id, user_id, artist_gage)
 
     # Benachrichtige Artists
     for artist in req.artists:
@@ -248,9 +279,10 @@ def send_push(artist, message):
 
 
 @api_bp.route('/requests/<int:req_id>/status', methods=['PUT'])
-@login_required
+@jwt_required()
 @swag_from('resources/swagger/requests_status_put.yml')
 def change_status(req_id):
+    user_id = get_jwt_identity()
     data = request.json
     status = data.get('status')
     req = dm.change_status(req_id, status)
@@ -260,45 +292,49 @@ def change_status(req_id):
 
 # Availability
 @api_bp.route('/availability', methods=['GET'])
-@login_required
+@jwt_required()
 @swag_from('resources/swagger/availability_get.yml')
 def get_availability():
-    slots = dm.get_availabilities(current_user.id)
+    user_id = get_jwt_identity()
+    slots = dm.get_availabilities(user_id)
     return jsonify([{'id': s.id, 'date': s.date.isoformat()} for s in slots])
 
 @api_bp.route('/availability', methods=['POST'])
-@login_required
+@jwt_required()
 @swag_from('resources/swagger/availability_post.yml')
 def add_availability():
+    user_id = get_jwt_identity()
     data = request.get_json()
     if isinstance(data, list):
         slots = []
         for item in data:
             date_str = item.get('date')
-            slot = dm.add_availability(current_user.id, date_str)
+            slot = dm.add_availability(user_id, date_str)
             slots.append({'id': slot.id})
         return jsonify(slots), 201
     else:
         date_str = data.get('date')
-        slot = dm.add_availability(current_user.id, date_str)
+        slot = dm.add_availability(user_id, date_str)
         return jsonify({'id': slot.id}), 201
 
 @api_bp.route('/availability/<int:slot_id>', methods=['DELETE'])
-@login_required
+@jwt_required()
 @swag_from('resources/swagger/availability_delete.yml')
 def remove_availability(slot_id):
+    user_id = get_jwt_identity()
     slot = dm.remove_availability(slot_id)
-    if not slot or slot.artist_id != current_user.id:
+    if not slot or slot.artist_id != user_id:
         return jsonify({'error':'Forbidden'}), 403
     return jsonify({'deleted': slot_id})
 
 
 # Admin rights
 @api_bp.route('/requests/all', methods=['GET'])
-@login_required
+@jwt_required()
 @swag_from('resources/swagger/requests_all_get.yml')
 def list_all_requests():
-    if not current_user.is_admin:
+    user_id, user = get_current_user()
+    if not user.is_admin:
         return jsonify({'error': 'Forbidden'}), 403
 
     all_requests = dm.get_all_requests()
@@ -326,12 +362,12 @@ def list_all_requests():
     } for r in all_requests])
 
 # AdminOffer CRUD
-@login_required
 @admin_bp.route('/requests/<int:req_id>/admin_offers', methods=['GET'])
+@jwt_required()
 @swag_from('resources/swagger/admin_requests_admin_offers_get.yml')
-
 def list_admin_offers(req_id):
-    if not current_user.is_admin:
+    user_id, user = get_current_user()
+    if not user.is_admin:
         return jsonify({'error': 'Forbidden'}), 403
     offers = dm.get_admin_offers(req_id)
     return jsonify([{
@@ -343,25 +379,27 @@ def list_admin_offers(req_id):
         'created_at': o.created_at.isoformat()
     } for o in offers])
 
-@login_required
 @admin_bp.route('/requests/<int:req_id>/admin_offers', methods=['POST'])
+@jwt_required()
 @swag_from('resources/swagger/admin_requests_admin_offers_post.yml')
 def create_admin_offer(req_id):
-    if not current_user.is_admin:
+    user_id, user = get_current_user()
+    if not user.is_admin:
         return jsonify({'error': 'Forbidden'}), 403
     data = request.json
     price = data.get('override_price')
     if price is None:
         return jsonify({'error': 'override_price is required'}), 400
     notes = data.get('notes')
-    offer = dm.create_admin_offer(req_id, current_user.id, price, notes)
+    offer = dm.create_admin_offer(req_id, user_id, price, notes)
     return jsonify({'id': offer.id}), 201
 
-@login_required
 @admin_bp.route('/admin_offers/<int:offer_id>', methods=['PUT'])
+@jwt_required()
 @swag_from('resources/swagger/admin_admin_offers_put.yml')
 def update_admin_offer(offer_id):
-    if not current_user.is_admin:
+    user_id, user = get_current_user()
+    if not user.is_admin:
         return jsonify({'error': 'Forbidden'}), 403
     data = request.json
     price = data.get('override_price')
@@ -375,11 +413,12 @@ def update_admin_offer(offer_id):
         'notes': offer.notes
     })
 
-@login_required
 @admin_bp.route('/admin_offers/<int:offer_id>', methods=['DELETE'])
+@jwt_required()
 @swag_from('resources/swagger/admin_admin_offers_delete.yml')
 def delete_admin_offer(offer_id):
-    if not current_user.is_admin:
+    user_id, user = get_current_user()
+    if not user.is_admin:
         return jsonify({'error': 'Forbidden'}), 403
     success = dm.delete_admin_offer(offer_id)
     if not success:
@@ -387,11 +426,11 @@ def delete_admin_offer(offer_id):
     return jsonify({'deleted': offer_id})
 
 @admin_bp.route('/dashboard')
-@login_required
+@jwt_required()
 @swag_from('resources/swagger/dashboard_get.yml')
-
 def dashboard():
-    if not current_user.is_admin:
+    user_id, user = get_current_user()
+    if not user.is_admin:
         return "Forbidden", 403
 
     all_slots  = dm.get_all_availabilities()

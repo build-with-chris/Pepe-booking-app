@@ -1,37 +1,36 @@
 # auth_routes.py
-from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import login_user, logout_user, login_required, current_user
+from flask import Blueprint, request, jsonify
+from flasgger import swag_from
+from flask_jwt_extended import create_access_token
+from flask_jwt_extended import jwt_required
+import os
 from datamanager import DataManager
 from flasgger import swag_from
+from flask_jwt_extended import create_access_token
 
-auth_bp = Blueprint('auth', __name__, template_folder='templates')
+auth_bp = Blueprint('auth', __name__)
 
 dm = DataManager()
 
-@auth_bp.route('/login', methods=['GET', 'POST'])
+# JWT-based login/ logout: client should discard the token
+
+
+@auth_bp.route('/login', methods=['POST'])
 @swag_from('resources/swagger/auth_login.yml')
 def login():
-    if request.method == 'POST':
-        email = request.form.get('email')
-        pw    = request.form.get('password')
-        print(pw)
+        data = request.get_json() or {}
+        email = data.get('email')
+        pw = data.get('password')
         artist = dm.get_artist_by_email(email)
         if artist and artist.check_password(pw):
-            login_user(artist)
-            flash('Welcome back!', 'success')
-            return redirect(url_for('api.list_requests'))
-        flash('Invalid email or password', 'danger')
-    return render_template('login.html')
+            token = create_access_token(identity=artist.id)
+            return jsonify(access_token=token,
+                        user={'id': artist.id, 'email': artist.email}), 200
+        return jsonify({"msg": "Invalid credentials"}), 401
 
 
-# localStorage entfernen 
-
-
-@auth_bp.route('/logout')
-@login_required
-@swag_from('resources/swagger/auth_logout.yml')
-
+@auth_bp.route('/logout', methods=['POST'])
+@jwt_required()
+@swag_from(os.path.join(os.path.dirname(__file__), 'resources', 'swagger', 'auth_logout.yml'))
 def logout():
-    logout_user()
-    flash('You have been logged out.', 'info')
-    return redirect(url_for('auth.login'))
+    return jsonify({"msg": "Logout successful"}), 200

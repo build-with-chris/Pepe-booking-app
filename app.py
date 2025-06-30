@@ -1,10 +1,9 @@
 from flask import Flask
 from config import Config
 from models import db
-from routes import api_bp, admin_bp
 from flask_jwt_extended import JWTManager
-from flask_login import LoginManager
 from auth_routes import auth_bp
+from routes import api_bp, admin_bp
 from flasgger import Swagger
 from flask_cors import CORS
 
@@ -12,13 +11,13 @@ app = Flask(__name__)
 app.config.from_object(Config)
 db.init_app(app)
 
-login_manager = LoginManager(app)
-login_manager.login_view = 'auth.login'
+# login_manager = LoginManager(app)
+# login_manager.login_view = 'auth.login'
 
-@login_manager.user_loader
-def load_user(user_id):
-    from datamanager import DataManager
-    return DataManager().get_artist(user_id)
+# @login_manager.user_loader
+# def load_user(user_id):
+#     from datamanager import DataManager
+#     return DataManager().get_artist(user_id)
 
 jwt = JWTManager(app)
 
