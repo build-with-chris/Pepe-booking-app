@@ -1,71 +1,50 @@
 tags:
   - Admin
-parameters:
-  - name: body
-    in: body
-    required: true
+summary: Get admin dashboard data
+description: Returns availability slots and offers for all artists; only accessible by admins.
+produces:
+  - application/json
+security:
+  - Bearer: []
+responses:
+  200:
+    description: Dashboard data retrieved successfully
     schema:
       type: object
-      required:
-        - name
-        - email
-        - password
-        - disciplines
       properties:
-        name:
-          type: string
-        email:
-          type: string
-        password:
-          type: string
-        phone_number:
-          type: string
-        address:
-          type: string
-        is_admin:
-          type: boolean
-        price_min:
-          type: integer
-        price_max:
-          type: integer
-        disciplines:
+        slots:
           type: array
-          description: |
-            Select one or more allowed disciplines from the list:
-            - Zauberer
-            - Cyr-Wheel
-            - Bodenakrobatik
-            - Luftakrobatik
-            - Partnerakrobatik
-            - Chinese Pole
-            - Hula Hoop
-            - Handstand
-            - Contemporary Dance
-            - Breakdance
-            - Teeterboard
-            - Jonglage
-            - Moderation
-            - Pantomime/Entertainment
           items:
-            type: string
-            enum:
-              - Zauberer
-              - Cyr-Wheel
-              - Bodenakrobatik
-              - Luftakrobatik
-              - Partnerakrobatik
-              - Chinese Pole
-              - Hula Hoop
-              - Handstand
-              - Contemporary Dance
-              - Breakdance
-              - Teeterboard
-              - Jonglage
-              - Moderation
-              - Pantomime/Entertainment
-          example:
-            - Zauberer
-            - Cyr-Wheel
-responses:
-  201:
-    description: Artist created
+            type: object
+            properties:
+              id:
+                type: integer
+              date:
+                type: string
+                format: date
+        offers:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              client_name:
+                type: string
+              client_email:
+                type: string
+              event_date:
+                type: string
+                format: date
+              event_time:
+                type: string
+                nullable: true
+              team_size:
+                type: integer
+              status:
+                type: string
+              price_offered:
+                type: number
+                nullable: true
+  403:
+    description: "Forbidden: Only admins may access this endpoint"

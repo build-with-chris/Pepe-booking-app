@@ -2,8 +2,9 @@ from flask import Flask
 from config import Config
 from models import db
 from flask_jwt_extended import JWTManager
-from auth_routes import auth_bp
-from routes import api_bp, admin_bp
+from routes       import api_bp
+from auth_routes  import auth_bp
+from admin_routes import admin_bp
 from flasgger import Swagger
 from flask_cors import CORS
 
@@ -11,13 +12,9 @@ app = Flask(__name__)
 app.config.from_object(Config)
 db.init_app(app)
 
-# login_manager = LoginManager(app)
-# login_manager.login_view = 'auth.login'
-
-# @login_manager.user_loader
-# def load_user(user_id):
-#     from datamanager import DataManager
-#     return DataManager().get_artist(user_id)
+app.register_blueprint(auth_bp,  url_prefix='/auth')
+app.register_blueprint(api_bp,   url_prefix='/api')
+app.register_blueprint(admin_bp, url_prefix='/admin')
 
 jwt = JWTManager(app)
 
@@ -48,11 +45,6 @@ app.config['SWAGGER'] = {
     'uiversion': 2
 }
 Swagger(app, template=template)
-
-app.register_blueprint(auth_bp, url_prefix='/auth')
-app.register_blueprint(api_bp,  url_prefix='/api')
-app.register_blueprint(admin_bp, url_prefix='/admin')
-
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 

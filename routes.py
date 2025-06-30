@@ -1,14 +1,13 @@
 from flask import current_app, request, jsonify
-from flask import Blueprint, render_template
+from flask import Blueprint
 from datamanager import DataManager
 from services import calculate_price
 from models import db
 from flasgger import swag_from
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity
 
 api_bp = Blueprint('api', __name__)
-admin_bp = Blueprint('admin', __name__, template_folder='templates')
-auth_bp = Blueprint('auth', __name__)
+
 dm = DataManager()
 
 def get_current_user():
@@ -18,25 +17,6 @@ def get_current_user():
     user_id = int(get_jwt_identity())
     user = dm.get_artist(user_id)
     return user_id, user
-
-#auth-route
-@auth_bp.route('/login', methods=['POST'])
-def login():
-    data = request.get_json() or {}
-    email = data.get('email')
-    pw = data.get('password')
-    artist = dm.get_artist_by_email(email)
-    if artist and artist.check_password(pw):
-        token = create_access_token(identity=artist.id)
-        return jsonify(access_token=token,
-                       user={'id': artist.id, 'email': artist.email}), 200
-    return jsonify({"msg": "Invalid credentials"}), 401
-
-
-@auth_bp.route('/logout')
-def logout():
-    # Logout functionality remains unchanged
-    pass
 
 
 # Artists
@@ -328,113 +308,3 @@ def remove_availability(slot_id):
     return jsonify({'deleted': slot_id})
 
 
-# Admin rights
-@api_bp.route('/requests/all', methods=['GET'])
-@jwt_required()
-@swag_from('resources/swagger/requests_all_get.yml')
-def list_all_requests():
-    user_id, user = get_current_user()
-    if not user.is_admin:
-        return jsonify({'error': 'Forbidden'}), 403
-
-    all_requests = dm.get_all_requests()
-    return jsonify([{
-        'id':                r.id,
-        'client_name':       r.client_name,
-        'client_email':      r.client_email,
-        'event_date':        r.event_date.isoformat(),
-        'event_time':        r.event_time.isoformat() if r.event_time else None,
-        'duration_minutes':  r.duration_minutes,
-        'event_type':        r.event_type,
-        'show_discipline':   r.show_discipline,
-        'team_size':         r.team_size,
-        'number_of_guests':  r.number_of_guests,
-        'event_address':     r.event_address,
-        'is_indoor':         r.is_indoor,
-        'special_requests':  r.special_requests,
-        'needs_light':       r.needs_light,
-        'needs_sound':       r.needs_sound,
-        'status':            r.status,
-        'price_min':         r.price_min,
-        'price_max':         r.price_max,
-        'price_offered':     r.price_offered,
-        'artist_ids': [a.id for a in r.artists]
-    } for r in all_requests])
-
-# AdminOffer CRUD
-@admin_bp.route('/requests/<int:req_id>/admin_offers', methods=['GET'])
-@jwt_required()
-@swag_from('resources/swagger/admin_requests_admin_offers_get.yml')
-def list_admin_offers(req_id):
-    user_id, user = get_current_user()
-    if not user.is_admin:
-        return jsonify({'error': 'Forbidden'}), 403
-    offers = dm.get_admin_offers(req_id)
-    return jsonify([{
-        'id': o.id,
-        'request_id': o.request_id,
-        'admin_id': o.admin_id,
-        'override_price': o.override_price,
-        'notes': o.notes,
-        'created_at': o.created_at.isoformat()
-    } for o in offers])
-
-@admin_bp.route('/requests/<int:req_id>/admin_offers', methods=['POST'])
-@jwt_required()
-@swag_from('resources/swagger/admin_requests_admin_offers_post.yml')
-def create_admin_offer(req_id):
-    user_id, user = get_current_user()
-    if not user.is_admin:
-        return jsonify({'error': 'Forbidden'}), 403
-    data = request.json
-    price = data.get('override_price')
-    if price is None:
-        return jsonify({'error': 'override_price is required'}), 400
-    notes = data.get('notes')
-    offer = dm.create_admin_offer(req_id, user_id, price, notes)
-    return jsonify({'id': offer.id}), 201
-
-@admin_bp.route('/admin_offers/<int:offer_id>', methods=['PUT'])
-@jwt_required()
-@swag_from('resources/swagger/admin_admin_offers_put.yml')
-def update_admin_offer(offer_id):
-    user_id, user = get_current_user()
-    if not user.is_admin:
-        return jsonify({'error': 'Forbidden'}), 403
-    data = request.json
-    price = data.get('override_price')
-    notes = data.get('notes')
-    offer = dm.update_admin_offer(offer_id, price, notes)
-    if not offer:
-        return jsonify({'error': 'Not found'}), 404
-    return jsonify({
-        'id': offer.id,
-        'override_price': offer.override_price,
-        'notes': offer.notes
-    })
-
-@admin_bp.route('/admin_offers/<int:offer_id>', methods=['DELETE'])
-@jwt_required()
-@swag_from('resources/swagger/admin_admin_offers_delete.yml')
-def delete_admin_offer(offer_id):
-    user_id, user = get_current_user()
-    if not user.is_admin:
-        return jsonify({'error': 'Forbidden'}), 403
-    success = dm.delete_admin_offer(offer_id)
-    if not success:
-        return jsonify({'error': 'Not found'}), 404
-    return jsonify({'deleted': offer_id})
-
-@admin_bp.route('/dashboard')
-@jwt_required()
-@swag_from('resources/swagger/dashboard_get.yml')
-def dashboard():
-    user_id, user = get_current_user()
-    if not user.is_admin:
-        return "Forbidden", 403
-
-    all_slots  = dm.get_all_availabilities()
-    all_offers = dm.get_all_offers()
-    return render_template('dashboard.html',
-                           slots=all_slots,
-                           offers=all_offers)
