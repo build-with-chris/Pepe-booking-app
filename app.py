@@ -27,8 +27,21 @@ template = {
     "title": "Pepe Backend API",
     "description": "This Api provides Endpoint for Artists to edit their availability, "
     "provides auth login and enables requests for the client",
-    "version": "1.0"
-}
+        "version": "1.0"
+    },
+    "securityDefinitions": {
+        "Bearer": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "description": "JWT Authorization header using the Bearer scheme. Example: 'Authorization: Bearer <token>'"
+        }
+    },
+    "security": [
+        {
+            "Bearer": []
+        }
+    ]
 }
 app.config['SWAGGER'] = {
     'title': "Pepe Backend API",

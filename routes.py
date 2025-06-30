@@ -15,7 +15,7 @@ def get_current_user():
     """
     Returns a tuple (user_id, user) for the currently authenticated JWT user.
     """
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     user = dm.get_artist(user_id)
     return user_id, user
 

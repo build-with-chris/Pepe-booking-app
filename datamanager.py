@@ -31,10 +31,15 @@ ALLOWED_EVENT_TYPES = ['Private Feier', 'Firmenfeier', 'Incentive', 'Streetshow'
 
 
 class DataManager:
+    """
+    Provides database operations for artists, requests, and availability.
+    """
     def __init__(self):
+        """Initialize the data manager with the database session."""
         self.db = db
 
     def get_or_create_discipline(self, name):
+        """Return an existing discipline by name or create it if not found."""
         from models import Discipline
         name = name.strip()
         for allowed in ALLOWED_DISCIPLINES:
@@ -50,18 +55,22 @@ class DataManager:
 
     # Artist methods
     def get_all_artists(self):
+        """Return a list of all artists."""
         return Artist.query.all()
 
     def get_artist(self, artist_id):
+        """Return the artist with the given ID, or None if not found."""
         return Artist.query.get(artist_id)
     
     # in datamanager.py, innerhalb class DataManager:
     def get_artist_by_email(self, email):
+        """Return the artist matching the given email, or None."""
         return Artist.query.filter_by(email=email).first()
 
     def create_artist(self, name, email, password, disciplines,
                       phone_number=None, address=None,
                       price_min=1500, price_max=1900, is_admin=False):
+        """Create a new artist with given details and default availability."""
         from datetime import timedelta
         artist = Artist(
             name=name,
@@ -90,9 +99,7 @@ class DataManager:
         return artist
 
     def get_artists_by_discipline(self, disciplines, event_date):
-        """
-        Returns Artists matching any given discipline AND available on event_date.
-        """
+        """Return artists available on a date matching any of the given disciplines."""
         if isinstance(disciplines, str):
             disciplines = [disciplines]
 
@@ -120,9 +127,11 @@ class DataManager:
 
     # BookingRequest methods
     def get_all_requests(self):
+        """Return a list of all booking requests."""
         return BookingRequest.query.all()
 
     def get_request(self, request_id):
+        """Return the booking request with the given ID."""
         return BookingRequest.query.get(request_id)
 
     def create_request(self,
@@ -134,6 +143,7 @@ class DataManager:
                        needs_light, needs_sound, 
                        artists, event_time="18:00",
                        distance_km=0.0, newsletter_opt_in=False):
+        """Create a new booking request and associate it with matching artists."""
         # event_date as date object or string 'YYYY-MM-DD'
         if isinstance(event_date, str):
             event_date = date.fromisoformat(event_date)
@@ -184,6 +194,7 @@ class DataManager:
         return request
 
     def set_offer(self, request_id, artist_id, price_offered):
+        """Record an artist's offer for a booking request and update status."""
         # 1. Store the artist's offered gage in the association table
         self.db.session.execute(
             booking_artists.update()
@@ -253,6 +264,7 @@ class DataManager:
         return req
 
     def change_status(self, request_id, status):
+        """Change the status of a booking request if the status is valid."""
         req = self.get_request(request_id)
         if req and status in ALLOWED_STATUSES:
             req.status = status
@@ -261,12 +273,14 @@ class DataManager:
 
     # Availability methods
     def get_availabilities(self, artist_id=None):
+        """Return availability slots, optionally filtered by artist ID."""
         query = Availability.query
         if artist_id:
             query = query.filter_by(artist_id=artist_id)
         return query.all()
 
     def add_availability(self, artist_id, date_obj):
+        """Add an availability slot for an artist on a specific date."""
         # date_obj: date or string
         if isinstance(date_obj, str):
             date_obj = date.fromisoformat(date_obj)
@@ -279,6 +293,7 @@ class DataManager:
         return slot
 
     def remove_availability(self, availability_id):
+        """Remove an availability slot by its ID."""
         slot = Availability.query.get(availability_id)
         if slot:
             self.db.session.delete(slot)
@@ -286,25 +301,29 @@ class DataManager:
         return slot
 
     def delete_artist(self, artist_id):
-            artist = Artist.query.get(artist_id)
-            if artist:
-                self.db.session.delete(artist)
-                self.db.session.commit()
-                return True
-            return False
+        """Delete an artist and all related data by ID."""
+        artist = Artist.query.get(artist_id)
+        if artist:
+            self.db.session.delete(artist)
+            self.db.session.commit()
+            return True
+        return False
     
     def get_all_availabilities(self):
-        """Gibt alle Availability-Einträge zurück, egal von welchem Artist."""
+        """Return all availability slots for all artists."""
         return Availability.query.all()
 
     def get_all_offers(self):
-        """
-        Gibt alle BookingRequest-Einträge zurück, bei denen bereits ein Angebot 
-        gesetzt wurde (price_offered != None).
-        """
+        """Return all booking requests that have received offers."""
         return BookingRequest.query.filter(BookingRequest.price_offered.isnot(None)).all()
 
     def get_requests_for_artist_with_recommendation(self, artist_id):
+        """Return future booking requests recommended for the given artist."""
+        # Ensure artist_id is an integer for comparison
+        try:
+            artist_id = int(artist_id)
+        except (TypeError, ValueError):
+            return []
         # Get the artist object for base rates
         artist = self.get_artist(artist_id)
         # Find all requests involving this artist
@@ -355,12 +374,15 @@ class DataManager:
 
     # AdminOffer methods
     def get_admin_offers(self, request_id):
+        """Return admin offers for a given booking request."""
         return AdminOffer.query.filter_by(request_id=request_id).all()
 
     def get_admin_offer(self, offer_id):
+        """Return a specific admin offer by its ID."""
         return AdminOffer.query.get(offer_id)
 
     def create_admin_offer(self, request_id, admin_id, override_price, notes=None):
+        """Create a new admin offer for a booking request."""
         offer = AdminOffer(
             request_id=request_id,
             admin_id=admin_id,
@@ -372,6 +394,7 @@ class DataManager:
         return offer
 
     def update_admin_offer(self, offer_id, override_price=None, notes=None):
+        """Update an existing admin offer's price or notes."""
         offer = self.get_admin_offer(offer_id)
         if not offer:
             return None
@@ -383,6 +406,7 @@ class DataManager:
         return offer
 
     def delete_admin_offer(self, offer_id):
+        """Delete an admin offer by its ID."""
         offer = self.get_admin_offer(offer_id)
         if not offer:
             return False

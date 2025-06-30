@@ -18,12 +18,12 @@ dm = DataManager()
 @auth_bp.route('/login', methods=['POST'])
 @swag_from('resources/swagger/auth_login.yml')
 def login():
-        data = request.get_json() or {}
+        data = request.get_json(force=True, silent=True) or {}
         email = data.get('email')
         pw = data.get('password')
         artist = dm.get_artist_by_email(email)
         if artist and artist.check_password(pw):
-            token = create_access_token(identity=artist.id)
+            token = create_access_token(identity=str(artist.id))
             return jsonify(access_token=token,
                         user={'id': artist.id, 'email': artist.email}), 200
         return jsonify({"msg": "Invalid credentials"}), 401
