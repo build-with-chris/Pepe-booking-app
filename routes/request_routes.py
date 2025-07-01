@@ -1,6 +1,4 @@
-"""
-Booking-Modul: Endpunkte zum Erstellen, Abrufen und Bearbeiten von Buchungsanfragen.
-"""
+
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datamanager import DataManager
@@ -10,6 +8,9 @@ from models import db
 from flasgger import swag_from
 from routes.api_routes import get_current_user
 
+"""
+Booking-Modul: Endpunkte zum Erstellen, Abrufen und Bearbeiten von Buchungsanfragen.
+"""
 
 # Blueprint für Buchungsanfragen unter /api/requests
 booking_bp = Blueprint('booking', __name__, url_prefix='/api/requests')

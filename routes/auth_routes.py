@@ -1,13 +1,15 @@
 # auth_routes.py
-"""
-Auth-Modul: Enthält Endpunkte für Login und Logout mittels JWT-Token.
-"""
+
 from flask import Blueprint, request, jsonify
 from flasgger import swag_from
 from flask_jwt_extended import create_access_token
 from flask_jwt_extended import jwt_required
 import os
 from datamanager import DataManager
+
+"""
+Auth-Modul: Enthält Endpunkte für Login und Logout mittels JWT-Token.
+"""
 
 # Blueprint für Auth-Routen (Login/Logout)
 auth_bp = Blueprint('auth', __name__)
