@@ -6,7 +6,7 @@ ALLOWED_STATUSES = [
     "storniert"
 ]
 from models import db, Artist, BookingRequest, Availability, Discipline, booking_artists, AdminOffer
-from services import calculate_price
+from services.calculate_price import calculate_price
 from flask import current_app
 from datetime import date, time
 

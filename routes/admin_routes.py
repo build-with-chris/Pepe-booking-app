@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datamanager import DataManager
 from flasgger import swag_from
-from routes import get_current_user
+from routes.api_routes import get_current_user
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 dm = DataManager()

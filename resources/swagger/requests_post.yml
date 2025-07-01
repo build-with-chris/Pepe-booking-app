@@ -1,9 +1,9 @@
 description: |
   Create a new booking request.
 
-  **Allowed Event Types:** Private Feier, Firmenfeier, Incentive, Streetshow
+  **Event Types:** Private Feier, Firmenfeier, Incentive, Streetshow
 
-  **Allowed Disciplines:** Zauberer, Cyr-Wheel, Bodenakrobatik, Luftakrobatik, Partnerakrobatik, Chinese Pole, Hula Hoop, Handstand, Contemporary Dance, Breakdance, Teeterboard, Jonglage, Moderation, Pantomime/Entertainment
+  **Disciplines:** Zauberer, Cyr-Wheel, Bodenakrobatik, Luftakrobatik, Partnerakrobatik, Chinese Pole, Hula Hoop, Handstand, Contemporary Dance, Breakdance, Teeterboard, Jonglage, Moderation, Pantomime/Entertainment
 tags:
   - Requests
 parameters:

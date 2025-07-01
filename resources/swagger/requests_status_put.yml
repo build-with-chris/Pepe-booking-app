@@ -1,8 +1,15 @@
+
+
 tags:
   - Requests
 description: |
-  Ändert den Status einer bestehenden Anfrage. 
-  Erlaubte Statuswerte: angefragt, angeboten, akzeptiert, abgelehnt, storniert.
+  Ändert den Status einer bestehenden Anfrage.
+  Erlaubte Statuswerte:
+    - angefragt
+    - angeboten
+    - akzeptiert
+    - abgelehnt
+    - storniert
 parameters:
   - name: req_id
     in: path
@@ -17,6 +24,12 @@ parameters:
       properties:
         status:
           type: string
+          enum:
+            - angefragt
+            - angeboten
+            - akzeptiert
+            - abgelehnt
+            - storniert
 responses:
   200:
     description: Status updated successfully
