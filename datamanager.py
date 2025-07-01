@@ -2,6 +2,7 @@ from models import db, Artist, BookingRequest, Availability, Discipline, booking
 from services.calculate_price import calculate_price
 from flask import current_app
 from datetime import date, time, timedelta
+import re
 
  # Zulässige Statuswerte für Buchungsanfragen
 ALLOWED_STATUSES = ["angefragt", "angeboten", "akzeptiert", "abgelehnt", "storniert"]
@@ -37,10 +38,20 @@ class DataManager:
     def get_or_create_discipline(self, name):
         """Gibt eine vorhandene Disziplin anhand des Namens zurück oder legt sie an, falls sie nicht existiert."""
         name = name.strip()
+        # Offizielle Schreibweise prüfen und normalisieren
+        normalized = False
         for allowed in ALLOWED_DISCIPLINES:
             if allowed.lower() == name.lower():
-                name = allowed  # normalize to official spelling
+                name = allowed
+                normalized = True
                 break
+
+        # Validierung für unbekannte Namen (leer oder Sonderzeichen)
+        if not normalized:
+            if not name:
+                raise ValueError("Disziplinname darf nicht leer sein")
+            if not re.match(r'^[A-Za-z0-9 äöüÄÖÜß\/-]+$', name):
+                raise ValueError(f"Ungültige Disziplin: {name}")
         disc = Discipline.query.filter_by(name=name).first()
         if not disc:
             disc = Discipline(name=name)
@@ -396,10 +407,12 @@ class DataManager:
         return offer
 
     def delete_admin_offer(self, offer_id):
-        """Löscht ein Admin-Angebot anhand seiner ID."""
+        """Löscht ein Admin-Angebot anhand seiner ID und gibt das gelöschte Objekt zurück."""
         offer = self.get_admin_offer(offer_id)
         if not offer:
-            return False
+            return None
+        # Objekt für Rückgabe vorm Löschen sichern
+        deleted_offer = offer
         self.db.session.delete(offer)
         self.db.session.commit()
-        return True
+        return deleted_offer
