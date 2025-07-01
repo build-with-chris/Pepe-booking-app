@@ -5,7 +5,8 @@ from datetime import datetime
 
 db = SQLAlchemy()
 
-# Association table for many-to-many between Artist and BookingRequest
+# Association-Tabelle: Many-to-Many zwischen BookingRequest und Artist
+# mit zusätzlichem Feld 'requested_gage' für das angefragte Honorar.
 booking_artists = db.Table(
     'booking_artists',
     db.Column('booking_id', db.Integer, db.ForeignKey('booking_requests.id'), primary_key=True),
@@ -14,20 +15,23 @@ booking_artists = db.Table(
 )
 
 
-# Association table for many-to-many between Artist and Discipline
+# Association-Tabelle: Many-to-Many zwischen Artist und Discipline.
 artist_disciplines = db.Table(
     'artist_disciplines',
     db.Column('artist_id', db.Integer, db.ForeignKey('artists.id'), primary_key=True),
     db.Column('discipline_id', db.Integer, db.ForeignKey('disciplines.id'), primary_key=True)
 )
 
-# Discipline model
+
 class Discipline(db.Model):
+    """Disziplin, z. B. 'Zauberer' oder 'Cyr-Wheel', die einem Artist zugeordnet werden kann."""
     __tablename__ = 'disciplines'
     id   = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False)
 
+
 class Artist(UserMixin, db.Model):
+    """Artist-Profil mit persönlichen Daten, Login-Info und Beziehungen zu Disziplinen und Buchungsanfragen."""
     __tablename__ = 'artists'
     id             = db.Column(db.Integer, primary_key=True)
     name           = db.Column(db.String(100), nullable=False)
@@ -40,13 +44,14 @@ class Artist(UserMixin, db.Model):
     price_min      = db.Column(db.Integer, default=1500)
     price_max      = db.Column(db.Integer, default=1900)
 
+    # Beziehung: Ein Artist kann mehrere Disziplinen haben, und jede Disziplin kann mehreren Artists zugeordnet sein.
     disciplines    = db.relationship(
         'Discipline',
         secondary=artist_disciplines,
         backref='artists'
     )
 
-    # Many-to-many relationship to BookingRequest
+    # Beziehung: Ein Artist kann in mehreren Buchungsanfragen involviert sein und umgekehrt.
     bookings       = db.relationship(
         'BookingRequest',
         secondary=booking_artists,
@@ -59,20 +64,21 @@ class Artist(UserMixin, db.Model):
     def check_password(self, pw: str) -> bool:
         return check_password_hash(self.password_hash, pw)
 
+
 class BookingRequest(db.Model):
+    """Buchungsanfrage eines Clients mit Details wie Datum, Ort, Disziplinen und zugeordnete Artists."""
     __tablename__ = 'booking_requests'
     id                 = db.Column(db.Integer, primary_key=True)
     client_name        = db.Column(db.String(100), nullable=False)
     client_email       = db.Column(db.String(120), nullable=False)
 
-    # NEU: Event-Daten
-    event_type         = db.Column(db.String(50), nullable=False)   # Cooperate, Privat, Incentive, Streetshow
+    event_type         = db.Column(db.String(50), nullable=False)   # z.B. privat
     show_discipline    = db.Column(db.String(20), nullable=False)
     team_size          = db.Column(db.String(10), nullable=False)   
     number_of_guests   = db.Column(db.Integer, nullable=True)       
     event_address      = db.Column(db.String(200), nullable=True)   
-    is_indoor          = db.Column(db.Boolean, default=True)        # Indoor (True) / Outdoor (False)
-    event_date         = db.Column(db.Date, nullable=False)         # Date
+    is_indoor          = db.Column(db.Boolean, default=True)       
+    event_date         = db.Column(db.Date, nullable=False)         
     event_time         = db.Column(db.Time, nullable=True)          
     duration_minutes   = db.Column(db.Integer, nullable=False)     
     special_requests   = db.Column(db.Text, nullable=True)          
@@ -87,7 +93,7 @@ class BookingRequest(db.Model):
     price_offered      = db.Column(db.Integer, nullable=True)
     status             = db.Column(db.String(20), default='requested')
 
-    # Booking <-> Artist many-to-many
+    # Beziehung: Eine Buchungsanfrage kann mehrere Artists involvieren und vice versa.
     artists          = db.relationship(
         'Artist',
         secondary=booking_artists,
@@ -95,20 +101,21 @@ class BookingRequest(db.Model):
     )
 
 class Availability(db.Model):
+    """Verfügbarkeitstag eines Artists für (ganztägige) Buchungen."""
     __tablename__ = 'availabilities'
     id           = db.Column(db.Integer, primary_key=True)
     artist_id    = db.Column(db.Integer, db.ForeignKey('artists.id'), nullable=False)
     date         = db.Column(db.Date, nullable=False)  # full-day availability slot
 
-    # relationship back to Artist
+    # Beziehung: Ein Artist besitzt mehrere Verfügbarkeitstage.
     artist       = db.relationship(
         'Artist',
         backref=db.backref('availabilities', cascade='all, delete-orphan')
     )
 
 
-# New model: AdminOffer
 class AdminOffer(db.Model):
+    """Verwaltungs-Angebot eines Admin-Users für eine Buchungsanfrage."""
     __tablename__ = 'admin_offers'
     id = db.Column(db.Integer, primary_key=True)
     request_id = db.Column(db.Integer, db.ForeignKey('booking_requests.id'), nullable=False)
@@ -117,11 +124,12 @@ class AdminOffer(db.Model):
     notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
-    # Relationships
+    # Beziehung: Eine Buchungsanfrage kann mehrere AdminOffers haben.
     request = db.relationship(
         'BookingRequest',
         backref=db.backref('admin_offers', cascade='all, delete-orphan')
     )
+    # Beziehung: Ein Admin (Artist) kann mehrere AdminOffers erstellen.
     admin = db.relationship(
         'Artist',
         backref=db.backref('admin_offers', cascade='all, delete-orphan')

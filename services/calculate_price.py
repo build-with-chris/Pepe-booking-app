@@ -8,16 +8,17 @@ def calculate_price(base_min, base_max,
                     show_discipline='stage_show', team_size='solo',
                     duration=0, city=None):
     """
-    Calculate a price range (min, max) by applying in order:
-     1. Event-type multiplier (z.B. Firmenfeier ×1.3, Privat ×0.7, …)
-     2. Guest count multiplier (bis 50 ×0.8, 51–200 ×1.0, >200 ×1.2)
-     3. Wochenend- oder Wochentag-Modifier
-     4. Saison-/Feiertags-Modifier 
-     5. Indoor vs. Outdoor
-     6. Technik-Pauschalen (Licht, Sound)
-     7. Basis-Agenturgebühr (fee_pct)
-     8. Distanz-Zuschläge (ab 300 km +200 €, ab 600 km +300 €, München –100 €)
-     9. Dauer- und Team-Validierung (Solo ≤15 min, Walking Act Basis 20 min)
+    Berechnet eine Preisspanne (Min, Max) durch Anwendung folgender Schritte in dieser Reihenfolge:
+
+    1. Event-Typ-Multiplikator (z. B. Firmenfeier ×1.3, Privat ×0.7, …)
+    2. Gästezahl-Multiplikator (bis 50 ×0.8, 51–200 ×1.0, >200 ×1.2)
+    3. Wochenend- oder Wochentag-Modifikator
+    4. Newsletter-Rabatt
+    5. Indoor- vs. Outdoor-Faktor
+    6. Technikpauschalen (Licht, Sound)
+    7. Basis-Agenturgebühr (fee_pct)
+    8. Distanzzuschläge (ab 300 km +200 €, ab 600 km +300 €, München –100 €)
+    9. Fahrkosten
     """
     # 1. Event type
     event_weights = {
@@ -77,7 +78,7 @@ def calculate_price(base_min, base_max,
     elif distance_km >= 300:
         surcharge += 200
     # München-Rabatt
-    if city and city.lower() == 'münchen':
+    if city and city.lower() in ['münchen', 'muenchen', 'munich']:
         surcharge -= 100
 
     # 9. Travel fee

@@ -10,6 +10,14 @@ from flask_cors import CORS
 from routes.request_routes import booking_bp
 
 
+"""
+Hauptskript für den Flask-Server:
+- Konfiguration laden
+- DB initialisieren
+- Blueprints registrieren
+- Swagger‐UI und CORS einrichten
+"""
+
 
 app = Flask(__name__)
 app.config.from_object(Config)

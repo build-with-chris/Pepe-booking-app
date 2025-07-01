@@ -1,3 +1,6 @@
+"""
+Booking-Modul: Endpunkte zum Erstellen, Abrufen und Bearbeiten von Buchungsanfragen.
+"""
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datamanager import DataManager
@@ -8,6 +11,7 @@ from flasgger import swag_from
 from routes.api_routes import get_current_user
 
 
+# Blueprint für Buchungsanfragen unter /api/requests
 booking_bp = Blueprint('booking', __name__, url_prefix='/api/requests')
 dm = DataManager()
 
@@ -15,16 +19,18 @@ dm = DataManager()
 @jwt_required()
 @swag_from('resources/swagger/requests_get.yml')
 def list_requests():
+    """Gibt passende Buchungsanfragen für den eingeloggten Artist zurück."""
     user_id = get_jwt_identity()
-    # Liefere persönliche Empfehlungen für den eingeloggten Artist
     result = dm.get_requests_for_artist_with_recommendation(user_id)
     return jsonify(result)
 
+# kein Login erforderlich!
 @booking_bp.route('/requests', methods=['POST'])
 @swag_from('resources/swagger/requests_post.yml')
 def create_request():
+    """Erstellt eine neue Buchungsanfrage und berechnet eine Preisspanne."""
     data = request.json
-    # Normalize team_size: accept numeric or strings "solo"/"duo"
+    # Team-Größe normalisieren: Zahlen oder Strings wie "solo"/"duo" akzeptieren
     raw_team_size = data.get('team_size')
     if isinstance(raw_team_size, str):
         ts_lower = raw_team_size.strip().lower()
@@ -34,7 +40,7 @@ def create_request():
             team_size = 2
         elif ts_lower in ('group', 'gruppe'):
             team_size = 3
-            # simplified, because we don't calculate pmin or pmax for more than 2 people
+            # vereinfacht, da keine Preisberechnung mehr ab 3 Personen
         else:
             try:
                 team_size = int(raw_team_size)
@@ -42,7 +48,7 @@ def create_request():
                 return jsonify({'error': 'Invalid team_size'}), 400
     else:
         team_size = raw_team_size
-    # Einheitlicher Key: 'disciplines'
+
     disciplines = data.get('disciplines', [])
     event_date = data['event_date']
     artist_objs = dm.get_artists_by_discipline(disciplines, event_date)
@@ -53,7 +59,7 @@ def create_request():
         event_time        = data['event_time'],
         duration_minutes  = data['duration_minutes'],
         event_type        = data['event_type'],
-        show_discipline   = disciplines,  # hier auch korrekt!
+        show_discipline   = disciplines,  
         team_size         = team_size,
         number_of_guests  = data['number_of_guests'],
         event_address     = data['event_address'],
@@ -65,7 +71,7 @@ def create_request():
         distance_km       = data.get('distance_km', 0.0),
         newsletter_opt_in = data.get('newsletter_opt_in', False)
     )
-    # Sum base prices
+    # Preisspanne berechnen basierend auf ausgewählten Artists und Parametern
     if not req.artists:
         req.price_min = None
         req.price_max = None
@@ -73,7 +79,7 @@ def create_request():
         pmax = None
     else:
         fee_pct = float(current_app.config.get("AGENCY_FEE_PERCENT", 20))
-        # Travel fee only if at least one artist from a different city
+        #wenn Artisten aus verschiedenen Städten kommen
         event_city = data.get('event_address', '').split(',')[-1].strip().lower()
         external_artists = [
             a for a in artist_objs
@@ -81,11 +87,11 @@ def create_request():
         ]
         travel_distance = req.distance_km if external_artists else 0.0
 
-        # Determine base_min/base_max by team size
         if team_size == 1:
             base_min = min(a.price_min for a in artist_objs)
             base_max = max(a.price_max for a in artist_objs)
         elif team_size == 2:
+            # hier vereinfacht - kummuliert die Preis- Unter- & -Obergrenze der ersten beiden passenden Artisten
             sorted_by_min = sorted(artist_objs, key=lambda a: a.price_min)
             sorted_by_max = sorted(artist_objs, key=lambda a: a.price_max, reverse=True)
             base_min = sum(a.price_min for a in sorted_by_min[:2])
@@ -93,7 +99,6 @@ def create_request():
         else:
             base_min = base_max = None
 
-        # Calculate price if solo or duo, else manual review
         if base_min is not None:
             args = {
                 'base_min': base_min,
@@ -132,8 +137,10 @@ def create_request():
 @jwt_required()
 @swag_from('resources/swagger/requests_offer_put.yml')
 def set_offer(req_id):
+    """Ermöglicht einem eingeloggten Artist, ein Angebot für eine Anfrage abzugeben."""
     user_id, user = get_current_user()
     req = dm.get_request(req_id)
+    # Zugriff prüfen: Nur beteiligte Artists oder Admins dürfen bieten
     if not req or (user_id not in [a.id for a in req.artists]
                    and not user.is_admin):
         return jsonify({'error':'Not allowed'}), 403
@@ -143,7 +150,7 @@ def set_offer(req_id):
     if artist_gage is None:
         return jsonify({'error': 'artist_gage is required'}), 400
 
-    # Berechne neue Basis: Ersetze nur die Gage des aktuellen Artists
+    # Neue Basis berechnen: Preis des aktuellen Artists ersetzen
     base_min = sum(
         artist_gage if a.id == user_id else a.price_min
         for a in req.artists
@@ -175,8 +182,9 @@ def set_offer(req_id):
     # Speichere das neue Angebot
     req = dm.set_offer(req_id, user_id, artist_gage)
 
-    # Benachrichtige Artists
+    # Push-Benachrichtigung an alle Artists senden
     for artist in req.artists:
+        #aktuell noch dummy
         send_push(artist, f'New offer: {pmax} EUR for request {req_id}')
 
     # Bei Solo-Booking sofort das eigene Angebot zurückgeben
@@ -189,6 +197,7 @@ def set_offer(req_id):
         return jsonify({'status': req.status}), 200
 
 def send_push(artist, message):
+    """Protokolliert eine Push-Nachricht an einen Artist."""
     current_app.logger.info(f"PUSH to {artist.id}: {message}")
 
 
@@ -196,9 +205,11 @@ def send_push(artist, message):
 @jwt_required()
 @swag_from('resources/swagger/requests_status_put.yml')
 def change_status(req_id):
+    """Ändert den Status einer Buchungsanfrage."""
     user_id = get_jwt_identity()
     data = request.json
     status = data.get('status')
+    # Statusänderung durchführen
     req = dm.change_status(req_id, status)
     if not req:
         return jsonify({'error':'Invalid'}), 400

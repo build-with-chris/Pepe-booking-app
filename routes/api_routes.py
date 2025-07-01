@@ -6,14 +6,16 @@ from models import db
 from flasgger import swag_from
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
-api_bp = Blueprint('api', __name__)
+"""
+API-Modul: Beinhaltet Endpunkte für Artists, Verfügbarkeit und Buchungsanfragen.
+"""
 
+# Blueprint für API-Routen
+api_bp = Blueprint('api', __name__)
 dm = DataManager()
 
 def get_current_user():
-    """
-    Returns a tuple (user_id, user) for the currently authenticated JWT user.
-    """
+    """Gibt ein Tupel (user_id, user) des aktuell authentifizierten JWT-Users zurück."""
     user_id = int(get_jwt_identity())
     user = dm.get_artist(user_id)
     return user_id, user
@@ -23,6 +25,7 @@ def get_current_user():
 @api_bp.route('/artists', methods=['GET'])
 @swag_from('resources/swagger/artists_get.yml')
 def list_artists():
+    """Gibt alle Artists als JSON-Liste zurück."""
     artists = dm.get_all_artists()
     return jsonify([{
         'id': a.id,
@@ -35,6 +38,7 @@ def list_artists():
 @api_bp.route('/artists', methods=['POST'])
 @swag_from('resources/swagger/artists_post.yml')
 def create_artist():
+    """Legt einen neuen Artist mit den übergebenen Daten an."""
     data = request.json
     disciplines = data.get('disciplines')
     if not disciplines:
@@ -62,8 +66,9 @@ def create_artist():
 @jwt_required()
 @swag_from('resources/swagger/artists_delete.yml')
 def delete_artist(artist_id):
+    """Löscht den eingeloggten Artist, falls er mit der angegebenen ID übereinstimmt."""
     user_id = get_jwt_identity()
-    # nur der eingeloggte Artist darf sich selbst löschen
+    # Nur der eingeloggte Artist darf sich selbst löschen
     if user_id != artist_id:
         return jsonify({'error':'Forbidden'}), 403
 
@@ -78,12 +83,12 @@ def delete_artist(artist_id):
 
 
 
-
 # Availability
 @api_bp.route('/availability', methods=['GET'])
 @jwt_required()
 @swag_from('resources/swagger/availability_get.yml')
 def get_availability():
+    """Gibt alle Verfügbarkeitstage des eingeloggten Artists zurück."""
     user_id = get_jwt_identity()
     slots = dm.get_availabilities(user_id)
     return jsonify([{'id': s.id, 'date': s.date.isoformat()} for s in slots])
@@ -92,6 +97,8 @@ def get_availability():
 @jwt_required()
 @swag_from('resources/swagger/availability_post.yml')
 def add_availability():
+    """Fügt einen oder mehrere Verfügbarkeitstage für den eingeloggten Artist hinzu."""
+    # Aktuelle Benutzer-ID aus JWT abrufen
     user_id = get_jwt_identity()
     data = request.get_json()
     if isinstance(data, list):
@@ -110,10 +117,9 @@ def add_availability():
 @jwt_required()
 @swag_from('resources/swagger/availability_delete.yml')
 def remove_availability(slot_id):
+    """Entfernt einen Verfügbarkeitstag des eingeloggten Artists anhand der ID."""
     user_id = get_jwt_identity()
     slot = dm.remove_availability(slot_id)
     if not slot or slot.artist_id != user_id:
         return jsonify({'error':'Forbidden'}), 403
     return jsonify({'deleted': slot_id})
-
-

@@ -4,6 +4,12 @@ from datamanager import DataManager
 from flasgger import swag_from
 from routes.api_routes import get_current_user
 
+"""
+Admin-Modul: Enthält alle Endpunkte zum Verwalten von Buchungsanfragen,
+Admin-Angeboten und Dashboard-Daten. Nur für Admin-User zugänglich.
+"""
+
+# Blueprint für alle Admin-Routen mit URL-Prefix /admin
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 dm = DataManager()
 
@@ -12,6 +18,7 @@ dm = DataManager()
 @jwt_required()
 @swag_from('resources/swagger/requests_all_get.yml')
 def list_all_requests():
+    """Gibt alle Buchungsanfragen zurück (Admin-View)."""
     user_id, user = get_current_user()
     if not user.is_admin:
         return jsonify({'error': 'Forbidden'}), 403
@@ -45,6 +52,7 @@ def list_all_requests():
 @jwt_required()
 @swag_from('resources/swagger/admin_requests_admin_offers_get.yml')
 def list_admin_offers(req_id):
+    """Gibt alle Admin-Angebote für eine bestimmte Buchungsanfrage zurück."""
     user_id, user = get_current_user()
     if not user.is_admin:
         return jsonify({'error': 'Forbidden'}), 403
@@ -62,6 +70,7 @@ def list_admin_offers(req_id):
 @jwt_required()
 @swag_from('resources/swagger/admin_requests_admin_offers_post.yml')
 def create_admin_offer(req_id):
+    """Erstellt ein neues Admin-Angebot für eine Buchungsanfrage."""
     user_id, user = get_current_user()
     if not user.is_admin:
         return jsonify({'error': 'Forbidden'}), 403
@@ -77,6 +86,7 @@ def create_admin_offer(req_id):
 @jwt_required()
 @swag_from('resources/swagger/admin_admin_offers_put.yml')
 def update_admin_offer(offer_id):
+    """Aktualisiert ein bestehendes Admin-Angebot."""
     user_id, user = get_current_user()
     if not user.is_admin:
         return jsonify({'error': 'Forbidden'}), 403
@@ -96,6 +106,7 @@ def update_admin_offer(offer_id):
 @jwt_required()
 @swag_from('resources/swagger/admin_admin_offers_delete.yml')
 def delete_admin_offer(offer_id):
+    """Löscht ein Admin-Angebot anhand seiner ID."""
     user_id, user = get_current_user()
     if not user.is_admin:
         return jsonify({'error': 'Forbidden'}), 403
@@ -108,6 +119,8 @@ def delete_admin_offer(offer_id):
 @jwt_required()
 @swag_from('resources/swagger/dashboard_get.yml')
 def dashboard():
+    """Gibt Dashboard-Daten (Verfügbarkeiten und Angebote) zurück."""
+    # Nur Admins dürfen diese Aktion durchführen
     user_id, user = get_current_user()
     if not user.is_admin:
         return jsonify({'error': 'Forbidden'}), 403
