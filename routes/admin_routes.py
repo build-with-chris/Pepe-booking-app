@@ -16,7 +16,7 @@ dm = DataManager()
 # Admin rights
 @admin_bp.route('/requests/all', methods=['GET'])
 @jwt_required()
-@swag_from('resources/swagger/requests_all_get.yml')
+@swag_from('../resources/swagger/requests_all_get.yml')
 def list_all_requests():
     """Gibt alle Buchungsanfragen zurück (Admin-View)."""
     user_id, user = get_current_user()
@@ -50,7 +50,7 @@ def list_all_requests():
 # AdminOffer CRUD
 @admin_bp.route('/requests/<int:req_id>/admin_offers', methods=['GET'])
 @jwt_required()
-@swag_from('resources/swagger/admin_requests_admin_offers_get.yml')
+@swag_from('../resources/swagger/admin_requests_admin_offers_get.yml')
 def list_admin_offers(req_id):
     """Gibt alle Admin-Angebote für eine bestimmte Buchungsanfrage zurück."""
     user_id, user = get_current_user()
@@ -68,7 +68,7 @@ def list_admin_offers(req_id):
 
 @admin_bp.route('/requests/<int:req_id>/admin_offers', methods=['POST'])
 @jwt_required()
-@swag_from('resources/swagger/admin_requests_admin_offers_post.yml')
+@swag_from('../resources/swagger/admin_requests_admin_offers_post.yml')
 def create_admin_offer(req_id):
     """Erstellt ein neues Admin-Angebot für eine Buchungsanfrage."""
     user_id, user = get_current_user()
@@ -84,7 +84,7 @@ def create_admin_offer(req_id):
 
 @admin_bp.route('/admin_offers/<int:offer_id>', methods=['PUT'])
 @jwt_required()
-@swag_from('resources/swagger/admin_admin_offers_put.yml')
+@swag_from('../resources/swagger/admin_admin_offers_put.yml')
 def update_admin_offer(offer_id):
     """Aktualisiert ein bestehendes Admin-Angebot."""
     user_id, user = get_current_user()
@@ -104,7 +104,7 @@ def update_admin_offer(offer_id):
 
 @admin_bp.route('/admin_offers/<int:offer_id>', methods=['DELETE'])
 @jwt_required()
-@swag_from('resources/swagger/admin_admin_offers_delete.yml')
+@swag_from('../resources/swagger/admin_admin_offers_delete.yml')
 def delete_admin_offer(offer_id):
     """Löscht ein Admin-Angebot anhand seiner ID."""
     user_id, user = get_current_user()
@@ -117,7 +117,7 @@ def delete_admin_offer(offer_id):
 
 @admin_bp.route('/dashboard')
 @jwt_required()
-@swag_from('resources/swagger/dashboard_get.yml')
+@swag_from('../resources/swagger/dashboard_get.yml')
 def dashboard():
     """Gibt Dashboard-Daten (Verfügbarkeiten und Angebote) zurück."""
     # Nur Admins dürfen diese Aktion durchführen

@@ -23,7 +23,7 @@ def get_current_user():
 
 # Artists
 @api_bp.route('/artists', methods=['GET'])
-@swag_from('resources/swagger/artists_get.yml')
+@swag_from('../resources/swagger/artists_get.yml')
 def list_artists():
     """Gibt alle Artists als JSON-Liste zurück."""
     artists = dm.get_all_artists()
@@ -36,7 +36,7 @@ def list_artists():
     } for a in artists])
 
 @api_bp.route('/artists', methods=['POST'])
-@swag_from('resources/swagger/artists_post.yml')
+@swag_from('../resources/swagger/artists_post.yml')
 def create_artist():
     """Legt einen neuen Artist mit den übergebenen Daten an."""
     data = request.json
@@ -64,7 +64,7 @@ def create_artist():
 
 @api_bp.route('/artists/<int:artist_id>', methods=['DELETE'])
 @jwt_required()
-@swag_from('resources/swagger/artists_delete.yml')
+@swag_from('../resources/swagger/artists_delete.yml')
 def delete_artist(artist_id):
     """Löscht den eingeloggten Artist, falls er mit der angegebenen ID übereinstimmt."""
     user_id = get_jwt_identity()
@@ -86,7 +86,7 @@ def delete_artist(artist_id):
 # Availability
 @api_bp.route('/availability', methods=['GET'])
 @jwt_required()
-@swag_from('resources/swagger/availability_get.yml')
+@swag_from('../resources/swagger/availability_get.yml')
 def get_availability():
     """Gibt alle Verfügbarkeitstage des eingeloggten Artists zurück."""
     user_id = get_jwt_identity()
@@ -95,7 +95,7 @@ def get_availability():
 
 @api_bp.route('/availability', methods=['POST'])
 @jwt_required()
-@swag_from('resources/swagger/availability_post.yml')
+@swag_from('../resources/swagger/availability_post.yml')
 def add_availability():
     """Fügt einen oder mehrere Verfügbarkeitstage für den eingeloggten Artist hinzu."""
     # Aktuelle Benutzer-ID aus JWT abrufen
@@ -115,7 +115,7 @@ def add_availability():
 
 @api_bp.route('/availability/<int:slot_id>', methods=['DELETE'])
 @jwt_required()
-@swag_from('resources/swagger/availability_delete.yml')
+@swag_from('../resources/swagger/availability_delete.yml')
 def remove_availability(slot_id):
     """Entfernt einen Verfügbarkeitstag des eingeloggten Artists anhand der ID."""
     user_id = get_jwt_identity()

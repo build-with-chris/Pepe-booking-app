@@ -7,9 +7,7 @@ from flask_jwt_extended import jwt_required
 import os
 from datamanager import DataManager
 
-"""
-Auth-Modul: Enthält Endpunkte für Login und Logout mittels JWT-Token.
-"""
+
 
 # Blueprint für Auth-Routen (Login/Logout)
 auth_bp = Blueprint('auth', __name__)
@@ -19,7 +17,7 @@ dm = DataManager()
 
 
 @auth_bp.route('/login', methods=['POST'])
-@swag_from('resources/swagger/auth_login.yml')
+@swag_from('../resources/swagger/auth_login.yml')
 def login():
     """Authentifiziert einen Artist anhand von Email und Passwort und gibt ein JWT zurück."""
     # JSON-Payload mit Email und Passwort auslesen
@@ -38,7 +36,7 @@ def login():
 # Geschützte Logout-Route; erfordert gültigen JWT
 @auth_bp.route('/logout', methods=['POST'])
 @jwt_required()
-@swag_from(os.path.join(os.path.dirname(__file__), 'resources', 'swagger', 'auth_logout.yml'))
+@swag_from('../resources/swagger/auth_logout.yml')
 def logout():
     """Bestätigt das Logout; der Client verwirft das JWT selbst."""
     return jsonify({"msg": "Logout successful"}), 200

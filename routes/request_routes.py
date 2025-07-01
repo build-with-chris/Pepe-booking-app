@@ -1,4 +1,3 @@
-
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datamanager import DataManager
@@ -18,7 +17,7 @@ dm = DataManager()
 
 @booking_bp.route('/requests', methods=['GET'])
 @jwt_required()
-@swag_from('resources/swagger/requests_get.yml')
+@swag_from('../resources/swagger/requests_get.yml')
 def list_requests():
     """Gibt passende Buchungsanfragen für den eingeloggten Artist zurück."""
     user_id = get_jwt_identity()
@@ -27,7 +26,7 @@ def list_requests():
 
 # kein Login erforderlich!
 @booking_bp.route('/requests', methods=['POST'])
-@swag_from('resources/swagger/requests_post.yml')
+@swag_from('../resources/swagger/requests_post.yml')
 def create_request():
     """Erstellt eine neue Buchungsanfrage und berechnet eine Preisspanne."""
     data = request.json
@@ -136,7 +135,7 @@ def create_request():
 
 @booking_bp.route('/requests/<int:req_id>/offer', methods=['PUT'])
 @jwt_required()
-@swag_from('resources/swagger/requests_offer_put.yml')
+@swag_from('../resources/swagger/requests_offer_put.yml')
 def set_offer(req_id):
     """Ermöglicht einem eingeloggten Artist, ein Angebot für eine Anfrage abzugeben."""
     user_id, user = get_current_user()
@@ -204,7 +203,7 @@ def send_push(artist, message):
 
 @booking_bp.route('/requests/<int:req_id>/status', methods=['PUT'])
 @jwt_required()
-@swag_from('resources/swagger/requests_status_put.yml')
+@swag_from('../resources/swagger/requests_status_put.yml')
 def change_status(req_id):
     """Ändert den Status einer Buchungsanfrage."""
     user_id = get_jwt_identity()

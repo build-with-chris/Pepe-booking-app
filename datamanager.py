@@ -274,35 +274,7 @@ class DataManager:
             self.db.session.commit()
         return req
 
-    # Methoden für Verfügbarkeiten
-    def get_availabilities(self, artist_id=None):
-        """Gibt Verfügbarkeits-Slots zurück, optional gefiltert nach Artist-ID."""
-        query = Availability.query
-        if artist_id:
-            query = query.filter_by(artist_id=artist_id)
-        return query.all()
-
-    def add_availability(self, artist_id, date_obj):
-        """Fügt einen Verfügbarkeitstag für einen Artist an einem bestimmten Datum hinzu."""
-        # date_obj: date or string
-        if isinstance(date_obj, str):
-            date_obj = date.fromisoformat(date_obj)
-        existing = Availability.query.filter_by(artist_id=artist_id, date=date_obj).first()
-        if existing:
-            return existing  # Slot existiert schon, nichts tun
-        slot = Availability(artist_id=artist_id, date=date_obj)
-        self.db.session.add(slot)
-        self.db.session.commit()
-        return slot
-
-    def remove_availability(self, availability_id):
-        """Entfernt einen Verfügbarkeitstag anhand seiner ID."""
-        slot = Availability.query.get(availability_id)
-        if slot:
-            self.db.session.delete(slot)
-            self.db.session.commit()
-        return slot
-
+    
     def delete_artist(self, artist_id):
         """Löscht einen Artist und alle zugehörigen Daten anhand der ID."""
         artist = Artist.query.get(artist_id)
@@ -312,9 +284,6 @@ class DataManager:
             return True
         return False
     
-    def get_all_availabilities(self):
-        """Gibt alle Verfügbarkeitstage aller Artists zurück."""
-        return Availability.query.all()
 
     def get_all_offers(self):
         """Gibt alle Buchungsanfragen zurück, die bereits Angebote erhalten haben."""
@@ -372,47 +341,3 @@ class DataManager:
                 'recommended_price_max': rec_max
             })
         return result
-
-    # Methoden für Admin-Angebote
-    def get_admin_offers(self, request_id):
-        """Gibt Admin-Angebote für eine bestimmte Buchungsanfrage zurück."""
-        return AdminOffer.query.filter_by(request_id=request_id).all()
-
-    def get_admin_offer(self, offer_id):
-        """Gibt ein bestimmtes Admin-Angebot anhand seiner ID zurück."""
-        return AdminOffer.query.get(offer_id)
-
-    def create_admin_offer(self, request_id, admin_id, override_price, notes=None):
-        """Erstellt ein neues Admin-Angebot für eine Buchungsanfrage."""
-        offer = AdminOffer(
-            request_id=request_id,
-            admin_id=admin_id,
-            override_price=override_price,
-            notes=notes
-        )
-        self.db.session.add(offer)
-        self.db.session.commit()
-        return offer
-
-    def update_admin_offer(self, offer_id, override_price=None, notes=None):
-        """Aktualisiert Preis oder Notizen eines bestehenden Admin-Angebots."""
-        offer = self.get_admin_offer(offer_id)
-        if not offer:
-            return None
-        if override_price is not None:
-            offer.override_price = override_price
-        if notes is not None:
-            offer.notes = notes
-        self.db.session.commit()
-        return offer
-
-    def delete_admin_offer(self, offer_id):
-        """Löscht ein Admin-Angebot anhand seiner ID und gibt das gelöschte Objekt zurück."""
-        offer = self.get_admin_offer(offer_id)
-        if not offer:
-            return None
-        # Objekt für Rückgabe vorm Löschen sichern
-        deleted_offer = offer
-        self.db.session.delete(offer)
-        self.db.session.commit()
-        return deleted_offer
