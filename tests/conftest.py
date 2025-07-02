@@ -6,13 +6,15 @@ from sqlalchemy.orm import sessionmaker, scoped_session
 from managers.artist_manager import ArtistManager
 from managers.booking_requests_manager import BookingRequestManager
 from flask import url_for
+from config import TestConfig
+
 
 
 @pytest.fixture(scope='session')
 def app():
     """Verwendet eine frische In-Memory-Datenbank für Tests (NullPool verhindert Locks)."""
     flask_app.config['TESTING'] = True
-    flask_app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    flask_app.config.from_object(TestConfig)
     flask_app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'poolclass': NullPool,
         'connect_args': {'check_same_thread': False}

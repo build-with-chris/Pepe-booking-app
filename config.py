@@ -10,3 +10,8 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     AGENCY_FEE_PERCENT = int(os.getenv("AGENCY_FEE_PERCENT", "20"))    
     RATE_PER_KM         = 0.5
+
+class TestConfig(Config):
+    """Konfiguration für Tests mit In-Memory-Datenbank."""
+    TESTING = True
+    SQLALCHEMY_DATABASE_URI = os.getenv("TEST_DATABASE_URL", "sqlite:///:memory:")
