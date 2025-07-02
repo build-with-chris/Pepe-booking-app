@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, jsonify, request
 from config import Config
 from models import db
 from flask_jwt_extended import JWTManager
@@ -10,18 +10,16 @@ from flask_cors import CORS
 from routes.request_routes import booking_bp
 
 
-"""
-Hauptskript für den Flask-Server:
-- Konfiguration laden
-- DB initialisieren
-- Blueprints registrieren
-- Swagger‐UI und CORS einrichten
-"""
-
 
 app = Flask(__name__)
 app.config.from_object(Config)
 db.init_app(app)
+
+@app.before_request
+def _skip_jwt_for_options():
+    """Ermöglicht CORS-Preflight (OPTIONS) ohne JWT-Header."""
+    if request.method == 'OPTIONS':
+        return jsonify(), 200
 
 app.register_blueprint(auth_bp,  url_prefix='/auth')
 app.register_blueprint(api_bp,   url_prefix='/api')
@@ -29,6 +27,17 @@ app.register_blueprint(admin_bp, url_prefix='/admin')
 app.register_blueprint(booking_bp)
 
 jwt = JWTManager(app)
+@jwt.unauthorized_loader
+def missing_token_callback(err_msg):
+    return jsonify({"msg": f"Missing token: {err_msg}"}), 401
+
+@jwt.invalid_token_loader
+def invalid_token_callback(err_msg):
+    return jsonify({"msg": f"Invalid token: {err_msg}"}), 401
+
+@jwt.expired_token_loader
+def expired_token_callback(jwt_header, jwt_payload):
+    return jsonify({"msg": "Token expired"}), 401
 
 template = {
 "swagger": "2.0",

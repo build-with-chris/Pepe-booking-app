@@ -1,12 +1,16 @@
-from flask import current_app, request, jsonify
+from flask import request, jsonify
 from flask import Blueprint
 from services.calculate_price import calculate_price
-from models import db
 from flasgger import swag_from
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from managers.artist_manager import ArtistManager
 from managers.availability_manager import AvailabilityManager
 from managers.booking_requests_manager import BookingRequestManager
+from models import Availability
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 # Manager-Instanzen
 artist_mgr = ArtistManager()
@@ -104,25 +108,53 @@ def add_availability():
     # Aktuelle Benutzer-ID aus JWT abrufen
     user_id = get_jwt_identity()
     data = request.get_json()
-    if isinstance(data, list):
-        slots = []
-        for item in data:
-            date_str = item.get('date')
-            slot = avail_mgr.add_availability(user_id, date_str)
-            slots.append({'id': slot.id})
-        return jsonify(slots), 201
-    else:
-        date_str = data.get('date')
+    if not data:
+        return jsonify({'error': 'Date must be provided'}), 400
+
+    def create_slot(item):
+        date_str = item.get('date')
+        if not date_str:
+            raise KeyError('date')
+        try:
+            # parse to ensure valid format
+            from datetime import datetime
+            datetime.fromisoformat(date_str)
+        except ValueError:
+            raise ValueError('Invalid date format')
         slot = avail_mgr.add_availability(user_id, date_str)
-        return jsonify({'id': slot.id}), 201
+        return {'id': slot.id, 'date': slot.date.isoformat()}
+
+    slots = []
+    # batch or single
+
+    if isinstance(data, list):
+        try:
+            for item in data:
+                slots.append(create_slot(item))
+        except KeyError:
+            return jsonify({'error': 'Date must be provided'}), 400
+        except ValueError:
+            return jsonify({'error': 'Invalid date format'}), 400
+    else:
+        try:
+            slots.append(create_slot(data))
+        except KeyError:
+            return jsonify({'error': 'Date must be provided'}), 400
+        except ValueError:
+            return jsonify({'error': 'Invalid date format'}), 400
+    return jsonify(slots), 201
 
 @api_bp.route('/availability/<int:slot_id>', methods=['DELETE'])
 @jwt_required()
 @swag_from('../resources/swagger/availability_delete.yml')
 def remove_availability(slot_id):
     """Entfernt einen Verfügbarkeitstag des eingeloggten Artists anhand der ID."""
-    user_id = get_jwt_identity()
-    slot = avail_mgr.remove_availability(slot_id)
+    logger.debug(f"remove_availability called with slot_id={slot_id}")
+    user_id = int(get_jwt_identity())
+    # First retrieve without deleting
+    slot = Availability.query.get(slot_id)
     if not slot or slot.artist_id != user_id:
-        return jsonify({'error':'Forbidden'}), 403
+        return jsonify({'error': 'Forbidden'}), 403
+    # Authorized: delete now
+    avail_mgr.remove_availability(slot_id)
     return jsonify({'deleted': slot_id})

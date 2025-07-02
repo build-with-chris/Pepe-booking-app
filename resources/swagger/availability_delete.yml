@@ -1,18 +1,30 @@
+---
 tags:
   - Availability
-description: |
-  Delete a specific availability slot for an artist. Use this to block a day when the artist is not available.
+summary: Delete an availability slot
+description: Deletes a specific availability slot of the logged-in artist.
 parameters:
   - name: slot_id
     in: path
-    type: integer
     required: true
+    schema:
+      type: integer
     description: ID of the availability slot to delete
-    default: 123
+operationId: api.remove_availability
+security:
+  - Bearer: []
 responses:
-  200:
-    description: Availability slot deleted successfully
-  403:
-    description: Not allowed to delete this slot
-  404:
+  '200':
+    description: Slot deleted successfully
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            deleted:
+              type: integer
+              example: 42
+  '403':
+    description: Forbidden – user not allowed to delete this slot
+  '404':
     description: Slot not found

@@ -1,5 +1,3 @@
-
-
 from models import db, Availability
 from datetime import date
 
