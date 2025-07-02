@@ -31,11 +31,19 @@ def get_current_user():
     return user_id, user
 
 
+@api_bp.route('/greet')
+def greet_pepe():
+    return "Hello Pepe"
+
+
 # Artists
 @api_bp.route('/artists', methods=['GET'])
 @swag_from('../resources/swagger/artists_get.yml')
 def list_artists():
     """Gibt alle Artists als JSON-Liste zurück."""
+
+
+
     artists = artist_mgr.get_all_artists()
     return jsonify([{
         'id': a.id,
