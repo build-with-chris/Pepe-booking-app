@@ -28,6 +28,9 @@ class DisciplineManager:
         """Initialisiert den DisciplineManager mit der Datenbanksitzung."""
         self.db = db
 
+    def get_allowed_disciplines(self):
+        return ALLOWED_DISCIPLINES
+
     def get_or_create_discipline(self, name):
         """
         Gibt eine vorhandene Disziplin anhand des Namens zurück oder legt sie an, falls sie nicht existiert.

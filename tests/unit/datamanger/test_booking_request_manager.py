@@ -56,6 +56,7 @@ def test_set_offer_solo():
     updated = booking_mgr.set_offer(req.id, artist.id, 500)
     assert updated.status == 'angeboten'
     # Bei Solo-Booking wird die Agenturgebühr von 20% aufgerechnet: 500 × 1.2 = 600
+    # hier werden Gewichte von Gästeanzahl und Eventtyp nicht angewendet, da die Gage fix vorgegeben wird
     assert updated.price_offered == 600
 
 def test_set_offer_multiple():
