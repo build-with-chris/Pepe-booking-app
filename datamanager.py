@@ -6,7 +6,7 @@ import re
 
  # Zulässige Statuswerte für Buchungsanfragen
 ALLOWED_STATUSES = ["angefragt", "angeboten", "akzeptiert", "abgelehnt", "storniert"]
- # Erlaubte Event-Typen für Buchungsanfragen
+ # Zulässige Event-Typen für Buchungsanfragen
 ALLOWED_EVENT_TYPES = ['Private Feier', 'Firmenfeier', 'Incentive', 'Streetshow']
  # Liste der erlaubten Disziplinen, die ein Artist ausüben kann
 ALLOWED_DISCIPLINES = [
@@ -155,17 +155,18 @@ class DataManager:
         # event_time as string 'HH:MM'
         if isinstance(event_time, str):
             event_time = time.fromisoformat(event_time)
-        # validieren eventtyp
+        # Event-Type validieren
         if isinstance(event_type, str):
-            event_type_input = event_type.strip()
-            matched = next((e for e in ALLOWED_EVENT_TYPES 
-                            if e.lower() == event_type_input.lower()), None)
+            matched = next(
+                (e for e in ALLOWED_EVENT_TYPES if e.lower() == event_type.strip().lower()),
+                None
+            )
             if matched:
                 event_type = matched
             else:
                 raise ValueError(
-                    f"Invalid event_type: {event_type}. "
-                    f"Allowed: {ALLOWED_EVENT_TYPES}")
+                    f"Invalid event_type: {event_type}. Allowed: {ALLOWED_EVENT_TYPES}"
+                )
         if not isinstance(show_discipline, list):
             raise ValueError("show_discipline must be a list")
         for disc in show_discipline:

@@ -37,13 +37,18 @@ def calculate_price(base_min, base_max,
     min_p = base_min * w_event
     max_p = base_max * w_event
 
-    # 2. Guests
-    if num_guests <= 50:
-        g_mult = 0.8
-    elif num_guests <= 200:
+    # 2. Guests (skip reduction if fixed artist fee provided)
+    if base_min == base_max:
+        # Artist hat festen Gagen-Wert vorgegeben, also nicht reduzieren
         g_mult = 1.0
     else:
-        g_mult = 1.2
+        if num_guests <= 50:
+            g_mult = 0.8
+        elif num_guests <= 200:
+            g_mult = 1.0
+        else:
+            g_mult = 1.2
+
     min_p *= g_mult
     max_p *= g_mult
 

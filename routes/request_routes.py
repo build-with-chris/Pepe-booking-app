@@ -1,11 +1,16 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from datamanager import DataManager
 from services.calculate_price import calculate_price
 from flask import current_app
 from models import db
 from flasgger import swag_from
 from routes.api_routes import get_current_user
+from managers.booking_requests_manager import BookingRequestManager
+from managers.artist_manager import ArtistManager
+
+# Manager-Instanzen
+request_mgr = BookingRequestManager()
+artist_mgr = ArtistManager()
 
 """
 Booking-Modul: Endpunkte zum Erstellen, Abrufen und Bearbeiten von Buchungsanfragen.
@@ -13,7 +18,7 @@ Booking-Modul: Endpunkte zum Erstellen, Abrufen und Bearbeiten von Buchungsanfra
 
 # Blueprint für Buchungsanfragen unter /api/requests
 booking_bp = Blueprint('booking', __name__, url_prefix='/api/requests')
-dm = DataManager()
+
 
 @booking_bp.route('/requests', methods=['GET'])
 @jwt_required()
@@ -21,7 +26,7 @@ dm = DataManager()
 def list_requests():
     """Gibt passende Buchungsanfragen für den eingeloggten Artist zurück."""
     user_id = get_jwt_identity()
-    result = dm.get_requests_for_artist_with_recommendation(user_id)
+    result = request_mgr.get_requests_for_artist_with_recommendation(user_id)
     return jsonify(result)
 
 # kein Login erforderlich!
@@ -51,8 +56,8 @@ def create_request():
 
     disciplines = data.get('disciplines', [])
     event_date = data['event_date']
-    artist_objs = dm.get_artists_by_discipline(disciplines, event_date)
-    req = dm.create_request(
+    artist_objs = artist_mgr.get_artists_by_discipline(disciplines, event_date)
+    req = request_mgr.create_request(
         client_name       = data['client_name'],
         client_email      = data['client_email'],
         event_date        = data['event_date'],
@@ -139,7 +144,7 @@ def create_request():
 def set_offer(req_id):
     """Ermöglicht einem eingeloggten Artist, ein Angebot für eine Anfrage abzugeben."""
     user_id, user = get_current_user()
-    req = dm.get_request(req_id)
+    req = request_mgr.get_request(req_id)
     # Zugriff prüfen: Nur beteiligte Artists oder Admins dürfen bieten
     if not req or (user_id not in [a.id for a in req.artists]
                    and not user.is_admin):
@@ -180,7 +185,7 @@ def set_offer(req_id):
     )
 
     # Speichere das neue Angebot
-    req = dm.set_offer(req_id, user_id, artist_gage)
+    req = request_mgr.set_offer(req_id, user_id, artist_gage)
 
     # Push-Benachrichtigung an alle Artists senden
     for artist in req.artists:
@@ -210,7 +215,7 @@ def change_status(req_id):
     data = request.json
     status = data.get('status')
     # Statusänderung durchführen
-    req = dm.change_status(req_id, status)
+    req = request_mgr.change_status(req_id, status)
     if not req:
         return jsonify({'error':'Invalid'}), 400
     return jsonify({'status': req.status})

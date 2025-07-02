@@ -1,10 +1,17 @@
 from flask import current_app, request, jsonify
 from flask import Blueprint
-from datamanager import DataManager
 from services.calculate_price import calculate_price
 from models import db
 from flasgger import swag_from
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from managers.artist_manager import ArtistManager
+from managers.availability_manager import AvailabilityManager
+from managers.booking_requests_manager import BookingRequestManager
+
+# Manager-Instanzen
+artist_mgr = ArtistManager()
+avail_mgr = AvailabilityManager()
+request_mgr = BookingRequestManager()
 
 """
 API-Modul: Beinhaltet Endpunkte für Artists, Verfügbarkeit und Buchungsanfragen.
@@ -12,12 +19,11 @@ API-Modul: Beinhaltet Endpunkte für Artists, Verfügbarkeit und Buchungsanfrage
 
 # Blueprint für API-Routen
 api_bp = Blueprint('api', __name__)
-dm = DataManager()
 
 def get_current_user():
     """Gibt ein Tupel (user_id, user) des aktuell authentifizierten JWT-Users zurück."""
     user_id = int(get_jwt_identity())
-    user = dm.get_artist(user_id)
+    user = artist_mgr.get_artist(user_id)
     return user_id, user
 
 
@@ -26,7 +32,7 @@ def get_current_user():
 @swag_from('../resources/swagger/artists_get.yml')
 def list_artists():
     """Gibt alle Artists als JSON-Liste zurück."""
-    artists = dm.get_all_artists()
+    artists = artist_mgr.get_all_artists()
     return jsonify([{
         'id': a.id,
         'name': a.name,
@@ -44,7 +50,7 @@ def create_artist():
     if not disciplines:
         return jsonify({'error': 'Disciplines must be provided!'}), 400
 
-    artist = dm.create_artist(
+    artist = artist_mgr.create_artist(
         name=data['name'],
         email=data['email'],
         password=data['password'],
@@ -56,9 +62,6 @@ def create_artist():
         is_admin     = data.get('is_admin'),
         
     )
-    if 'password' in data:
-        artist.set_password(data['password'])
-    db.session.commit()
     return jsonify({'id': artist.id}), 201
 
 
@@ -72,7 +75,7 @@ def delete_artist(artist_id):
     if user_id != artist_id:
         return jsonify({'error':'Forbidden'}), 403
 
-    success = dm.delete_artist(artist_id)
+    success = artist_mgr.delete_artist(artist_id)
     if success:
         # und gleich ausloggen
         # from flask_login import logout_user
@@ -90,7 +93,7 @@ def delete_artist(artist_id):
 def get_availability():
     """Gibt alle Verfügbarkeitstage des eingeloggten Artists zurück."""
     user_id = get_jwt_identity()
-    slots = dm.get_availabilities(user_id)
+    slots = avail_mgr.get_availabilities(user_id)
     return jsonify([{'id': s.id, 'date': s.date.isoformat()} for s in slots])
 
 @api_bp.route('/availability', methods=['POST'])
@@ -105,12 +108,12 @@ def add_availability():
         slots = []
         for item in data:
             date_str = item.get('date')
-            slot = dm.add_availability(user_id, date_str)
+            slot = avail_mgr.add_availability(user_id, date_str)
             slots.append({'id': slot.id})
         return jsonify(slots), 201
     else:
         date_str = data.get('date')
-        slot = dm.add_availability(user_id, date_str)
+        slot = avail_mgr.add_availability(user_id, date_str)
         return jsonify({'id': slot.id}), 201
 
 @api_bp.route('/availability/<int:slot_id>', methods=['DELETE'])
@@ -119,7 +122,7 @@ def add_availability():
 def remove_availability(slot_id):
     """Entfernt einen Verfügbarkeitstag des eingeloggten Artists anhand der ID."""
     user_id = get_jwt_identity()
-    slot = dm.remove_availability(slot_id)
+    slot = avail_mgr.remove_availability(slot_id)
     if not slot or slot.artist_id != user_id:
         return jsonify({'error':'Forbidden'}), 403
     return jsonify({'deleted': slot_id})

@@ -1,8 +1,10 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from datamanager import DataManager
 from flasgger import swag_from
 from routes.api_routes import get_current_user
+from managers.booking_requests_manager import BookingRequestManager
+from managers.admin_offer_manager import AdminOfferManager
+from managers.availability_manager import AvailabilityManager
 
 """
 Admin-Modul: Enthält alle Endpunkte zum Verwalten von Buchungsanfragen,
@@ -11,7 +13,11 @@ Admin-Angeboten und Dashboard-Daten. Nur für Admin-User zugänglich.
 
 # Blueprint für alle Admin-Routen mit URL-Prefix /admin
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
-dm = DataManager()
+
+# Manager-Instanzen
+request_mgr = BookingRequestManager()
+offer_mgr = AdminOfferManager()
+avail_mgr = AvailabilityManager()
 
 # Admin rights
 @admin_bp.route('/requests/all', methods=['GET'])
@@ -23,7 +29,7 @@ def list_all_requests():
     if not user.is_admin:
         return jsonify({'error': 'Forbidden'}), 403
 
-    all_requests = dm.get_all_requests()
+    all_requests = request_mgr.get_all_requests()
     return jsonify([{
         'id':                r.id,
         'client_name':       r.client_name,
@@ -56,7 +62,7 @@ def list_admin_offers(req_id):
     user_id, user = get_current_user()
     if not user.is_admin:
         return jsonify({'error': 'Forbidden'}), 403
-    offers = dm.get_admin_offers(req_id)
+    offers = offer_mgr.get_admin_offers(req_id)
     return jsonify([{
         'id': o.id,
         'request_id': o.request_id,
@@ -79,7 +85,7 @@ def create_admin_offer(req_id):
     if price is None:
         return jsonify({'error': 'override_price is required'}), 400
     notes = data.get('notes')
-    offer = dm.create_admin_offer(req_id, user_id, price, notes)
+    offer = offer_mgr.create_admin_offer(req_id, user_id, price, notes)
     return jsonify({'id': offer.id}), 201
 
 @admin_bp.route('/admin_offers/<int:offer_id>', methods=['PUT'])
@@ -93,7 +99,7 @@ def update_admin_offer(offer_id):
     data = request.json
     price = data.get('override_price')
     notes = data.get('notes')
-    offer = dm.update_admin_offer(offer_id, price, notes)
+    offer = offer_mgr.update_admin_offer(offer_id, price, notes)
     if not offer:
         return jsonify({'error': 'Not found'}), 404
     return jsonify({
@@ -110,10 +116,10 @@ def delete_admin_offer(offer_id):
     user_id, user = get_current_user()
     if not user.is_admin:
         return jsonify({'error': 'Forbidden'}), 403
-    success = dm.delete_admin_offer(offer_id)
-    if not success:
+    deleted = offer_mgr.delete_admin_offer(offer_id)
+    if not deleted:
         return jsonify({'error': 'Not found'}), 404
-    return jsonify({'deleted': offer_id})
+    return jsonify({'deleted': deleted.id})
 
 @admin_bp.route('/dashboard')
 @jwt_required()
@@ -125,8 +131,8 @@ def dashboard():
     if not user.is_admin:
         return jsonify({'error': 'Forbidden'}), 403
 
-    slots = dm.get_all_availabilities()
-    offers = dm.get_all_offers()
+    slots = avail_mgr.get_all_availabilities()
+    offers = request_mgr.get_all_requests()
     return jsonify({
         'slots': [
             {'id': slot.id, 'date': slot.date.isoformat()}

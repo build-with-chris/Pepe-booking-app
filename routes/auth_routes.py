@@ -5,13 +5,16 @@ from flasgger import swag_from
 from flask_jwt_extended import create_access_token
 from flask_jwt_extended import jwt_required
 import os
-from datamanager import DataManager
+
+from managers.artist_manager import ArtistManager
 
 
 
 # Blueprint für Auth-Routen (Login/Logout)
 auth_bp = Blueprint('auth', __name__)
-dm = DataManager()
+
+# Manager-Instanz für Artist-Operationen
+artist_mgr = ArtistManager()
 
 # JWT-based login/ logout
 
@@ -24,7 +27,7 @@ def login():
     data = request.get_json(force=True, silent=True) or {}
     email = data.get('email')
     pw = data.get('password')
-    artist = dm.get_artist_by_email(email)
+    artist = artist_mgr.get_artist_by_email(email)
     if artist and artist.check_password(pw):
         # JWT mit der Künstler-ID erzeugen
         token = create_access_token(identity=str(artist.id))
