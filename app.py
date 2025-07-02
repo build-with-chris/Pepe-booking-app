@@ -27,17 +27,6 @@ app.register_blueprint(admin_bp, url_prefix='/admin')
 app.register_blueprint(booking_bp)
 
 jwt = JWTManager(app)
-@jwt.unauthorized_loader
-def missing_token_callback(err_msg):
-    return jsonify({"msg": f"Missing token: {err_msg}"}), 401
-
-@jwt.invalid_token_loader
-def invalid_token_callback(err_msg):
-    return jsonify({"msg": f"Invalid token: {err_msg}"}), 401
-
-@jwt.expired_token_loader
-def expired_token_callback(jwt_header, jwt_payload):
-    return jsonify({"msg": "Token expired"}), 401
 
 template = {
 "swagger": "2.0",
