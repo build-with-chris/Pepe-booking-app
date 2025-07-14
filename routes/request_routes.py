@@ -64,6 +64,7 @@ def create_request():
         event_time        = data['event_time'],
         duration_minutes  = data['duration_minutes'],
         event_type        = data['event_type'],
+        show_type         = data['show_type']
         show_discipline   = disciplines,  
         team_size         = team_size,
         number_of_guests  = data['number_of_guests'],

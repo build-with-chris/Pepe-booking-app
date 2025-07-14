@@ -36,6 +36,13 @@ parameters:
             - Streetshow
           description: "Allowed values: Private Feier, Firmenfeier, Incentive, Streetshow"
           example: "Private Feier"
+        show_type:
+          type: string
+          enum:
+            - Walking Act
+            - Bühnen Show
+          description: "Allowed values: Walking Act, Bühnen Show"
+          example: "Walking Act"
         disciplines:
           type: array
           description: "Allowed values: Zauberer, Cyr-Wheel, Bodenakrobatik, Luftakrobatik, Partnerakrobatik, Chinese Pole, Hula Hoop, Handstand, Contemporary Dance, Breakdance, Teeterboard, Jonglage, Moderation, Pantomime/Entertainment"
