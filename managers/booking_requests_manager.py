@@ -133,7 +133,7 @@ class BookingRequestManager:
                 show_discipline=req.show_discipline,
                 team_size=req.team_size,
                 duration=req.duration_minutes,
-                city=None
+                event_address=req.event_address
             )
             req.price_offered = min_p
             self.db.session.commit()
@@ -193,7 +193,7 @@ class BookingRequestManager:
                 show_discipline=r.show_discipline,
                 team_size=1,
                 duration=r.duration_minutes,
-                city=None
+                event_address=r.event_address
             )
             result.append({
                 'id': r.id,
