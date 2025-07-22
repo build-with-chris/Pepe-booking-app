@@ -76,7 +76,6 @@ parso==0.8.4
 pexpect==4.9.0
 pickleshare==0.7.5
 pillow==11.1.0
-pipreqs==0.5.0
 platformdirs==4.3.6
 plotly==6.0.0
 pluggy==1.5.0
