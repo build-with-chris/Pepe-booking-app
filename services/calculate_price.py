@@ -6,7 +6,7 @@ def calculate_price(base_min, base_max,
                     is_weekend=False, is_indoor=True,
                     needs_light=False, needs_sound=False,
                     show_discipline='stage_show', team_size='solo',
-                    duration=0, city=None):
+                    duration=0, event_address=None):
     """
     Berechnet eine Preisspanne (Min, Max) durch Anwendung folgender Schritte in dieser Reihenfolge:
 
@@ -78,12 +78,18 @@ def calculate_price(base_min, base_max,
 
     # 8. Distance surcharges
     surcharge = 0
+    city = None
+    if event_address:
+        # take substring after last comma, strip whitespace
+        raw_city = event_address.split(',')[-1].strip()
+        # assume format "PLZ Stadt"; split and use the last token as city name
+        city = raw_city.split()[-1].lower()
     if distance_km >= 600:
         surcharge += 300
     elif distance_km >= 300:
         surcharge += 200
     # München-Rabatt
-    if city and city.lower() in ['münchen', 'muenchen', 'munich']:
+    if city in ['münchen', 'muenchen', 'munich']:
         surcharge -= 100
 
     # 9. Travel fee

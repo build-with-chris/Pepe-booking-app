@@ -55,7 +55,7 @@ app.config['SWAGGER'] = {
     'uiversion': 2
 }
 Swagger(app, template=template)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+CORS(app)  
 
 
 if __name__=="__main__":
