@@ -2,4 +2,4 @@
 .venv
 __pychache__/
 .vscode/
-cookies.txt
+cookies.txt.venv-backend/
