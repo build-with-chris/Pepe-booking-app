@@ -23,7 +23,11 @@ artist_mgr = ArtistManager()
 
 # Supabase JWT verification setup
 SUPABASE_AUD = os.getenv("SUPABASE_AUD")
-JWKS_URL     = os.getenv("JWKS_URL")
+# Use Supabase JWKS endpoint (fallback to /auth/v1/keys)
+JWKS_URL = os.getenv("JWKS_URL") or f"{SUPABASE_AUD}/auth/v1/keys"
+
+print("ENV JWKS_URL:", os.getenv("JWKS_URL"))
+print("ENV SUPABASE_AUD:", os.getenv("SUPABASE_AUD"))
 
 # Decorator for protecting routes using Supabase JWT and optional role check
 def requires_auth(required_role=None):
