@@ -37,6 +37,9 @@ def requires_auth(required_role=None):
             token = auth_header.split(" ", 1)[1].strip()
             try:
                 header = jwt.get_unverified_header(token)
+                # Debug: list available JWKS kids and token kid
+                print("Available JWKS kids:", [k["kid"] for k in _jwks["keys"]])
+                print("Token kid:", header["kid"])
                 key = next(k for k in _jwks["keys"] if k["kid"] == header["kid"])
                 payload = jwt.decode(
                     token,
@@ -95,6 +98,9 @@ def verify_token():
     token = auth_header.split(" ", 1)[1].strip()
     try:
         header = jwt.get_unverified_header(token)
+        # Debug: list available JWKS kids and token kid
+        print("Available JWKS kids:", [k["kid"] for k in _jwks["keys"]])
+        print("Token kid:", header["kid"])
         key = next(k for k in _jwks["keys"] if k["kid"] == header["kid"])
         payload = jwt.decode(
             token,
