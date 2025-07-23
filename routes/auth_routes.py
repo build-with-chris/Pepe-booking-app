@@ -5,6 +5,10 @@ from flasgger import swag_from
 from flask_jwt_extended import create_access_token
 from flask_jwt_extended import jwt_required
 import os
+import requests
+from jose import jwt, JWTError
+from flask import request, jsonify, g
+from functools import wraps
 
 from managers.artist_manager import ArtistManager
 
@@ -15,6 +19,42 @@ auth_bp = Blueprint('auth', __name__)
 
 # Manager-Instanz für Artist-Operationen
 artist_mgr = ArtistManager()
+
+# Supabase JWT verification setup
+SUPABASE_AUD = os.getenv("SUPABASE_AUD")
+JWKS_URL     = os.getenv("JWKS_URL")
+_jwks = requests.get(JWKS_URL).json()
+
+# Decorator for protecting routes using Supabase JWT and optional role check
+def requires_auth(required_role=None):
+    """Decorator to protect routes using Supabase JWT and optional role check."""
+    def decorator(f):
+        @wraps(f)
+        def wrapped(*args, **kwargs):
+            auth_header = request.headers.get("Authorization", "")
+            if not auth_header.startswith("Bearer "):
+                return jsonify({"msg": "Missing or malformed Authorization header"}), 401
+            token = auth_header.split(" ", 1)[1].strip()
+            try:
+                header = jwt.get_unverified_header(token)
+                key = next(k for k in _jwks["keys"] if k["kid"] == header["kid"])
+                payload = jwt.decode(
+                    token,
+                    key,
+                    algorithms=[header["alg"]],
+                    audience=SUPABASE_AUD,
+                    options={"verify_exp": True}
+                )
+                g.user = payload
+                if required_role:
+                    role = payload.get("role") or payload.get("user_metadata", {}).get("role")
+                    if role != required_role:
+                        return jsonify({"msg": "Forbidden"}), 403
+                return f(*args, **kwargs)
+            except (StopIteration, JWTError) as e:
+                return jsonify({"msg": f"Token verification failed: {str(e)}"}), 401
+        return wrapped
+    return decorator
 
 # JWT-based login/ logout
 
@@ -43,3 +83,27 @@ def login():
 def logout():
     """Bestätigt das Logout; der Client verwirft das JWT selbst."""
     return jsonify({"msg": "Logout successful"}), 200
+
+
+# Supabase JWT verification endpoint
+@auth_bp.route('/verify', methods=['POST'])
+def verify_token():
+    """Verifiziert ein Supabase-JWT aus dem Authorization-Header."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return jsonify({"msg": "Missing or malformed Authorization header"}), 401
+
+    token = auth_header.split(" ", 1)[1].strip()
+    try:
+        header = jwt.get_unverified_header(token)
+        key = next(k for k in _jwks["keys"] if k["kid"] == header["kid"])
+        payload = jwt.decode(
+            token,
+            key,
+            algorithms=[header["alg"]],
+            audience=SUPABASE_AUD,
+            options={"verify_exp": True}
+        )
+        return jsonify({"user": payload}), 200
+    except (StopIteration, JWTError) as e:
+        return jsonify({"msg": f"Token verification failed: {str(e)}"}), 401

@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import get_jwt_identity
 from services.calculate_price import calculate_price
 from flask import current_app
 from models import db
@@ -7,6 +7,7 @@ from flasgger import swag_from
 from routes.api_routes import get_current_user
 from managers.booking_requests_manager import BookingRequestManager
 from managers.artist_manager import ArtistManager
+from routes.auth_routes import requires_auth
 
 # Manager-Instanzen
 request_mgr = BookingRequestManager()
@@ -21,7 +22,7 @@ booking_bp = Blueprint('booking', __name__, url_prefix='/api/requests')
 
 
 @booking_bp.route('/requests', methods=['GET'])
-@jwt_required()
+@requires_auth()
 @swag_from('../resources/swagger/requests_get.yml')
 def list_requests():
     """Gibt passende Buchungsanfragen für den eingeloggten Artist zurück."""
@@ -140,7 +141,7 @@ def create_request():
 
 
 @booking_bp.route('/requests/<int:req_id>/offer', methods=['PUT'])
-@jwt_required()
+@requires_auth()
 @swag_from('../resources/swagger/requests_offer_put.yml')
 def set_offer(req_id):
     """Ermöglicht einem eingeloggten Artist, ein Angebot für eine Anfrage abzugeben."""
@@ -208,7 +209,7 @@ def send_push(artist, message):
 
 
 @booking_bp.route('/requests/<int:req_id>/status', methods=['PUT'])
-@jwt_required()
+@requires_auth()
 @swag_from('../resources/swagger/requests_status_put.yml')
 def change_status(req_id):
     """Ändert den Status einer Buchungsanfrage."""

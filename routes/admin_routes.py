@@ -1,10 +1,10 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
 from flasgger import swag_from
 from routes.api_routes import get_current_user
 from managers.booking_requests_manager import BookingRequestManager
 from managers.admin_offer_manager import AdminOfferManager
 from managers.availability_manager import AvailabilityManager
+from routes.auth_routes import requires_auth
 
 """
 Admin-Modul: Enthält alle Endpunkte zum Verwalten von Buchungsanfragen,
@@ -21,14 +21,10 @@ avail_mgr = AvailabilityManager()
 
 # Admin rights
 @admin_bp.route('/requests/all', methods=['GET'])
-@jwt_required()
+@requires_auth(required_role="admin")
 @swag_from('../resources/swagger/requests_all_get.yml')
 def list_all_requests():
     """Gibt alle Buchungsanfragen zurück (Admin-View)."""
-    user_id, user = get_current_user()
-    if not user.is_admin:
-        return jsonify({'error': 'Forbidden'}), 403
-
     all_requests = request_mgr.get_all_requests()
     return jsonify([{
         'id':                r.id,
@@ -55,13 +51,10 @@ def list_all_requests():
 
 # AdminOffer CRUD
 @admin_bp.route('/requests/<int:req_id>/admin_offers', methods=['GET'])
-@jwt_required()
+@requires_auth(required_role="admin")
 @swag_from('../resources/swagger/admin_requests_admin_offers_get.yml')
 def list_admin_offers(req_id):
     """Gibt alle Admin-Angebote für eine bestimmte Buchungsanfrage zurück."""
-    user_id, user = get_current_user()
-    if not user.is_admin:
-        return jsonify({'error': 'Forbidden'}), 403
     offers = offer_mgr.get_admin_offers(req_id)
     return jsonify([{
         'id': o.id,
@@ -73,29 +66,28 @@ def list_admin_offers(req_id):
     } for o in offers])
 
 @admin_bp.route('/requests/<int:req_id>/admin_offers', methods=['POST'])
-@jwt_required()
+@requires_auth(required_role="admin")
 @swag_from('../resources/swagger/admin_requests_admin_offers_post.yml')
 def create_admin_offer(req_id):
     """Erstellt ein neues Admin-Angebot für eine Buchungsanfrage."""
-    user_id, user = get_current_user()
-    if not user.is_admin:
-        return jsonify({'error': 'Forbidden'}), 403
     data = request.json
     price = data.get('override_price')
     if price is None:
         return jsonify({'error': 'override_price is required'}), 400
     notes = data.get('notes')
+    user_id = None
+    # Try to get user_id from g.user if available
+    from flask import g
+    if hasattr(g, 'user'):
+        user_id = g.user.get('sub') or g.user.get('user_id')
     offer = offer_mgr.create_admin_offer(req_id, user_id, price, notes)
     return jsonify({'id': offer.id}), 201
 
 @admin_bp.route('/admin_offers/<int:offer_id>', methods=['PUT'])
-@jwt_required()
+@requires_auth(required_role="admin")
 @swag_from('../resources/swagger/admin_admin_offers_put.yml')
 def update_admin_offer(offer_id):
     """Aktualisiert ein bestehendes Admin-Angebot."""
-    user_id, user = get_current_user()
-    if not user.is_admin:
-        return jsonify({'error': 'Forbidden'}), 403
     data = request.json
     price = data.get('override_price')
     notes = data.get('notes')
@@ -109,28 +101,20 @@ def update_admin_offer(offer_id):
     })
 
 @admin_bp.route('/admin_offers/<int:offer_id>', methods=['DELETE'])
-@jwt_required()
+@requires_auth(required_role="admin")
 @swag_from('../resources/swagger/admin_admin_offers_delete.yml')
 def delete_admin_offer(offer_id):
     """Löscht ein Admin-Angebot anhand seiner ID."""
-    user_id, user = get_current_user()
-    if not user.is_admin:
-        return jsonify({'error': 'Forbidden'}), 403
     deleted = offer_mgr.delete_admin_offer(offer_id)
     if not deleted:
         return jsonify({'error': 'Not found'}), 404
     return jsonify({'deleted': deleted.id})
 
 @admin_bp.route('/dashboard')
-@jwt_required()
+@requires_auth(required_role="admin")
 @swag_from('../resources/swagger/dashboard_get.yml')
 def dashboard():
     """Gibt Dashboard-Daten (Verfügbarkeiten und Angebote) zurück."""
-    # Nur Admins dürfen diese Aktion durchführen
-    user_id, user = get_current_user()
-    if not user.is_admin:
-        return jsonify({'error': 'Forbidden'}), 403
-
     slots = avail_mgr.get_all_availabilities()
     offers = request_mgr.get_all_requests()
     return jsonify({
