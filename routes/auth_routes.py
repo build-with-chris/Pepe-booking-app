@@ -42,7 +42,6 @@ def requires_auth(required_role=None):
                     token,
                     key,
                     algorithms=[header["alg"]],
-                    audience=SUPABASE_AUD,
                     options={"verify_exp": True}
                 )
                 g.user = payload
@@ -101,7 +100,6 @@ def verify_token():
             token,
             key,
             algorithms=[header["alg"]],
-            audience=SUPABASE_AUD,
             options={"verify_exp": True}
         )
         return jsonify({"user": payload}), 200
