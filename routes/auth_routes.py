@@ -3,7 +3,6 @@
 from flask import Blueprint, request, jsonify
 from flasgger import swag_from
 from flask_jwt_extended import create_access_token
-from flask_jwt_extended import jwt_required
 import os
 import requests
 from jose import jwt, JWTError
@@ -80,7 +79,7 @@ def login():
 
 # Geschützte Logout-Route; erfordert gültigen JWT
 @auth_bp.route('/logout', methods=['POST'])
-@jwt_required()
+@requires_auth()
 @swag_from('../resources/swagger/auth_logout.yml')
 def logout():
     """Bestätigt das Logout; der Client verwirft das JWT selbst."""
