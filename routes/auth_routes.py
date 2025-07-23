@@ -8,6 +8,8 @@ import requests
 from jose import jwt, JWTError
 from flask import request, jsonify, g
 from functools import wraps
+from dotenv import load_dotenv
+load_dotenv()
 
 from managers.artist_manager import ArtistManager
 
@@ -22,7 +24,6 @@ artist_mgr = ArtistManager()
 # Supabase JWT verification setup
 SUPABASE_AUD = os.getenv("SUPABASE_AUD")
 JWKS_URL     = os.getenv("JWKS_URL")
-_jwks = requests.get(JWKS_URL).json()
 
 # Decorator for protecting routes using Supabase JWT and optional role check
 def requires_auth(required_role=None):
@@ -36,10 +37,11 @@ def requires_auth(required_role=None):
             token = auth_header.split(" ", 1)[1].strip()
             try:
                 header = jwt.get_unverified_header(token)
-                # Debug: list available JWKS kids and token kid
-                print("Available JWKS kids:", [k["kid"] for k in _jwks["keys"]])
+                # Fetch JWKS dynamically for each request
+                jwks = requests.get(JWKS_URL).json()
+                print("Available JWKS kids:", [k["kid"] for k in jwks.get("keys", [])])
                 print("Token kid:", header["kid"])
-                key = next(k for k in _jwks["keys"] if k["kid"] == header["kid"])
+                key = next(k for k in jwks.get("keys", []) if k["kid"] == header["kid"])
                 payload = jwt.decode(
                     token,
                     key,
@@ -97,10 +99,11 @@ def verify_token():
     token = auth_header.split(" ", 1)[1].strip()
     try:
         header = jwt.get_unverified_header(token)
-        # Debug: list available JWKS kids and token kid
-        print("Available JWKS kids:", [k["kid"] for k in _jwks["keys"]])
+        # Fetch JWKS dynamically for each request
+        jwks = requests.get(JWKS_URL).json()
+        print("Available JWKS kids:", [k["kid"] for k in jwks.get("keys", [])])
         print("Token kid:", header["kid"])
-        key = next(k for k in _jwks["keys"] if k["kid"] == header["kid"])
+        key = next(k for k in jwks.get("keys", []) if k["kid"] == header["kid"])
         payload = jwt.decode(
             token,
             key,
