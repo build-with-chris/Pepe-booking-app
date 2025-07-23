@@ -10,10 +10,10 @@ from functools import wraps
 from dotenv import load_dotenv
 load_dotenv()
 
-print("Loaded SUPABASE_JWT_SECRET:", (SUPABASE_JWT_SECRET or "")[:10], "…", len(SUPABASE_JWT_SECRET or ""))
 
 # Symmetric key for HS256 token verification
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+print("Loaded SUPABASE_JWT_SECRET:", (SUPABASE_JWT_SECRET or "")[:10], "…", len(SUPABASE_JWT_SECRET or ""))
 
 from managers.artist_manager import ArtistManager
 
