@@ -4,12 +4,14 @@ from flask import Blueprint, request, jsonify
 from flasgger import swag_from
 from flask_jwt_extended import create_access_token
 import os
-import requests
 from jose import jwt, JWTError
 from flask import request, jsonify, g
 from functools import wraps
 from dotenv import load_dotenv
 load_dotenv()
+
+# Symmetric key for HS256 token verification
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
 
 from managers.artist_manager import ArtistManager
 
@@ -26,8 +28,6 @@ SUPABASE_AUD = os.getenv("SUPABASE_AUD")
 # Use Supabase JWKS endpoint (fallback to /auth/v1/keys)
 JWKS_URL = os.getenv("JWKS_URL") or f"{SUPABASE_AUD}/auth/v1/keys"
 
-print("ENV JWKS_URL:", os.getenv("JWKS_URL"))
-print("ENV SUPABASE_AUD:", os.getenv("SUPABASE_AUD"))
 
 # Decorator for protecting routes using Supabase JWT and optional role check
 def requires_auth(required_role=None):
@@ -40,16 +40,11 @@ def requires_auth(required_role=None):
                 return jsonify({"msg": "Missing or malformed Authorization header"}), 401
             token = auth_header.split(" ", 1)[1].strip()
             try:
-                header = jwt.get_unverified_header(token)
-                # Fetch JWKS dynamically for each request
-                jwks = requests.get(JWKS_URL).json()
-                print("Available JWKS kids:", [k["kid"] for k in jwks.get("keys", [])])
-                print("Token kid:", header["kid"])
-                key = next(k for k in jwks.get("keys", []) if k["kid"] == header["kid"])
+                # Symmetric HS256 verification using Supabase JWT Secret
                 payload = jwt.decode(
                     token,
-                    key,
-                    algorithms=[header["alg"]],
+                    SUPABASE_JWT_SECRET,
+                    algorithms=["HS256"],
                     options={"verify_exp": True}
                 )
                 g.user = payload
@@ -102,16 +97,11 @@ def verify_token():
 
     token = auth_header.split(" ", 1)[1].strip()
     try:
-        header = jwt.get_unverified_header(token)
-        # Fetch JWKS dynamically for each request
-        jwks = requests.get(JWKS_URL).json()
-        print("Available JWKS kids:", [k["kid"] for k in jwks.get("keys", [])])
-        print("Token kid:", header["kid"])
-        key = next(k for k in jwks.get("keys", []) if k["kid"] == header["kid"])
+        # Symmetric HS256 verification using Supabase JWT Secret
         payload = jwt.decode(
             token,
-            key,
-            algorithms=[header["alg"]],
+            SUPABASE_JWT_SECRET,
+            algorithms=["HS256"],
             options={"verify_exp": True}
         )
         return jsonify({"user": payload}), 200
