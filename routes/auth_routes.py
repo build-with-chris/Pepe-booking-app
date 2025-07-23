@@ -1,5 +1,3 @@
-# auth_routes.py
-
 from flask import Blueprint, request, jsonify
 from flasgger import swag_from
 from flask_jwt_extended import create_access_token
@@ -47,7 +45,7 @@ def requires_auth(required_role=None):
                     token,
                     SUPABASE_JWT_SECRET,
                     algorithms=["HS256"],
-                    options={"verify_exp": True}
+                    options={"verify_exp": True, "verify_aud": False}
                 )
                 g.user = payload
                 if required_role:
@@ -104,7 +102,7 @@ def verify_token():
             token,
             SUPABASE_JWT_SECRET,
             algorithms=["HS256"],
-            options={"verify_exp": True}
+            options={"verify_exp": True, "verify_aud": False}
         )
         return jsonify({"user": payload}), 200
     except (StopIteration, JWTError) as e:
