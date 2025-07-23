@@ -109,3 +109,14 @@ def verify_token():
         return jsonify({"user": payload}), 200
     except (StopIteration, JWTError) as e:
         return jsonify({"msg": f"Token verification failed: {str(e)}"}), 401
+
+# Debug route to inspect loaded JWT secret
+@auth_bp.route('/debug-secret', methods=['GET'])
+def debug_secret():
+    """Gives information about the loaded SUPABASE_JWT_SECRET."""
+    secret = os.getenv("SUPABASE_JWT_SECRET")
+    return jsonify({
+        "loaded": bool(secret),
+        "length": len(secret or ""),
+        "preview": (secret or "")[:8] + "…" if secret else None
+    }), 200
