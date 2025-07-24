@@ -1,17 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flasgger import swag_from
-from flask_jwt_extended import create_access_token
-import os
-from jose import jwt, JWTError
-from flask import request, jsonify, g
-from functools import wraps
-from dotenv import load_dotenv
-load_dotenv()
-
-
-# Symmetric key for HS256 token verification
-SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
-print("Loaded SUPABASE_JWT_SECRET:", (SUPABASE_JWT_SECRET or "")[:10], "…", len(SUPABASE_JWT_SECRET or ""))
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 
 from managers.artist_manager import ArtistManager
 
@@ -22,41 +11,6 @@ auth_bp = Blueprint('auth', __name__)
 
 # Manager-Instanz für Artist-Operationen
 artist_mgr = ArtistManager()
-
-# Supabase JWT verification setup
-SUPABASE_AUD = os.getenv("SUPABASE_AUD")
-# Use Supabase JWKS endpoint (fallback to /auth/v1/keys)
-JWKS_URL = os.getenv("JWKS_URL") or f"{SUPABASE_AUD}/auth/v1/keys"
-
-
-# Decorator for protecting routes using Supabase JWT and optional role check
-def requires_auth(required_role=None):
-    """Decorator to protect routes using Supabase JWT and optional role check."""
-    def decorator(f):
-        @wraps(f)
-        def wrapped(*args, **kwargs):
-            auth_header = request.headers.get("Authorization", "")
-            if not auth_header.startswith("Bearer "):
-                return jsonify({"msg": "Missing or malformed Authorization header"}), 401
-            token = auth_header.split(" ", 1)[1].strip()
-            try:
-                # Symmetric HS256 verification using Supabase JWT Secret
-                payload = jwt.decode(
-                    token,
-                    SUPABASE_JWT_SECRET,
-                    algorithms=["HS256"],
-                    options={"verify_exp": True, "verify_aud": False}
-                )
-                g.user = payload
-                if required_role:
-                    role = payload.get("role") or payload.get("user_metadata", {}).get("role")
-                    if role != required_role:
-                        return jsonify({"msg": "Forbidden"}), 403
-                return f(*args, **kwargs)
-            except (StopIteration, JWTError) as e:
-                return jsonify({"msg": f"Token verification failed: {str(e)}"}), 401
-        return wrapped
-    return decorator
 
 # JWT-based login/ logout
 
@@ -80,10 +34,11 @@ def login():
 
 # Geschützte Logout-Route; erfordert gültigen JWT
 @auth_bp.route('/logout', methods=['POST'])
-@requires_auth()
+@jwt_required()
 @swag_from('../resources/swagger/auth_logout.yml')
 def logout():
     """Bestätigt das Logout; der Client verwirft das JWT selbst."""
+    user_id = get_jwt_identity()
     return jsonify({"msg": "Logout successful"}), 200
 
 

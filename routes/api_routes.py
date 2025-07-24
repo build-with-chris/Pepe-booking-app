@@ -1,8 +1,8 @@
 from flask import request, jsonify
 from flask import Blueprint
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from services.calculate_price import calculate_price
 from flasgger import swag_from
-from routes.auth_routes import requires_auth
 from managers.artist_manager import ArtistManager
 from managers.availability_manager import AvailabilityManager
 from managers.booking_requests_manager import BookingRequestManager
@@ -54,7 +54,6 @@ def list_artists():
     } for a in artists])
 
 @api_bp.route('/artists', methods=['POST'])
-@requires_auth(required_role="admin")
 @swag_from('../resources/swagger/artists_post.yml')
 def create_artist():
     """Legt einen neuen Artist mit den übergebenen Daten an."""
@@ -79,7 +78,7 @@ def create_artist():
 
 
 @api_bp.route('/artists/<int:artist_id>', methods=['DELETE'])
-@requires_auth()
+@jwt_required()
 @swag_from('../resources/swagger/artists_delete.yml')
 def delete_artist(artist_id):
     """Löscht den eingeloggten Artist, falls er mit der angegebenen ID übereinstimmt."""
@@ -101,7 +100,7 @@ def delete_artist(artist_id):
 
 # Availability
 @api_bp.route('/availability', methods=['GET'])
-@requires_auth()
+@jwt_required()
 @swag_from('../resources/swagger/availability_get.yml')
 def get_availability():
     """Gibt alle Verfügbarkeitstage des eingeloggten Artists zurück."""
@@ -110,7 +109,7 @@ def get_availability():
     return jsonify([{'id': s.id, 'date': s.date.isoformat()} for s in slots])
 
 @api_bp.route('/availability', methods=['POST'])
-@requires_auth()
+@jwt_required()
 @swag_from('../resources/swagger/availability_post.yml')
 def add_availability():
     """Fügt einen oder mehrere Verfügbarkeitstage für den eingeloggten Artist hinzu."""
@@ -154,7 +153,7 @@ def add_availability():
     return jsonify(slots), 201
 
 @api_bp.route('/availability/<int:slot_id>', methods=['DELETE'])
-@requires_auth()
+@jwt_required()
 @swag_from('../resources/swagger/availability_delete.yml')
 def remove_availability(slot_id):
     """Entfernt einen Verfügbarkeitstag des eingeloggten Artists anhand der ID."""

@@ -4,7 +4,7 @@ from routes.api_routes import get_current_user
 from managers.booking_requests_manager import BookingRequestManager
 from managers.admin_offer_manager import AdminOfferManager
 from managers.availability_manager import AvailabilityManager
-from routes.auth_routes import requires_auth
+from flask_jwt_extended import jwt_required, get_jwt_identity
 
 """
 Admin-Modul: Enthält alle Endpunkte zum Verwalten von Buchungsanfragen,
@@ -21,7 +21,7 @@ avail_mgr = AvailabilityManager()
 
 # Admin rights
 @admin_bp.route('/requests/all', methods=['GET'])
-@requires_auth(required_role="admin")
+@jwt_required()
 @swag_from('../resources/swagger/requests_all_get.yml')
 def list_all_requests():
     """Gibt alle Buchungsanfragen zurück (Admin-View)."""
@@ -51,7 +51,7 @@ def list_all_requests():
 
 # AdminOffer CRUD
 @admin_bp.route('/requests/<int:req_id>/admin_offers', methods=['GET'])
-@requires_auth(required_role="admin")
+@jwt_required()
 @swag_from('../resources/swagger/admin_requests_admin_offers_get.yml')
 def list_admin_offers(req_id):
     """Gibt alle Admin-Angebote für eine bestimmte Buchungsanfrage zurück."""
@@ -66,7 +66,7 @@ def list_admin_offers(req_id):
     } for o in offers])
 
 @admin_bp.route('/requests/<int:req_id>/admin_offers', methods=['POST'])
-@requires_auth(required_role="admin")
+@jwt_required()
 @swag_from('../resources/swagger/admin_requests_admin_offers_post.yml')
 def create_admin_offer(req_id):
     """Erstellt ein neues Admin-Angebot für eine Buchungsanfrage."""
@@ -84,7 +84,7 @@ def create_admin_offer(req_id):
     return jsonify({'id': offer.id}), 201
 
 @admin_bp.route('/admin_offers/<int:offer_id>', methods=['PUT'])
-@requires_auth(required_role="admin")
+@jwt_required()
 @swag_from('../resources/swagger/admin_admin_offers_put.yml')
 def update_admin_offer(offer_id):
     """Aktualisiert ein bestehendes Admin-Angebot."""
@@ -101,7 +101,7 @@ def update_admin_offer(offer_id):
     })
 
 @admin_bp.route('/admin_offers/<int:offer_id>', methods=['DELETE'])
-@requires_auth(required_role="admin")
+@jwt_required()
 @swag_from('../resources/swagger/admin_admin_offers_delete.yml')
 def delete_admin_offer(offer_id):
     """Löscht ein Admin-Angebot anhand seiner ID."""
@@ -111,7 +111,7 @@ def delete_admin_offer(offer_id):
     return jsonify({'deleted': deleted.id})
 
 @admin_bp.route('/dashboard')
-@requires_auth(required_role="admin")
+@jwt_required()
 @swag_from('../resources/swagger/dashboard_get.yml')
 def dashboard():
     """Gibt Dashboard-Daten (Verfügbarkeiten und Angebote) zurück."""
