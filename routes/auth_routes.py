@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flasgger import swag_from
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 
@@ -42,26 +42,20 @@ def logout():
     return jsonify({"msg": "Logout successful"}), 200
 
 
-# Supabase JWT verification endpoint
-@auth_bp.route('/verify', methods=['POST'])
-def verify_token():
-    """Verifiziert ein Supabase-JWT aus dem Authorization-Header."""
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        return jsonify({"msg": "Missing or malformed Authorization header"}), 401
 
-    token = auth_header.split(" ", 1)[1].strip()
+# Verify the JWT token issued by login
+@auth_bp.route('/verify', methods=['POST'])
+@jwt_required()
+def verify_token():
+    """
+    Protected endpoint to verify the JWT and return the user identity.
+    """
     try:
-        # Symmetric HS256 verification using Supabase JWT Secret
-        payload = jwt.decode(
-            token,
-            SUPABASE_JWT_SECRET,
-            algorithms=["HS256"],
-            options={"verify_exp": True, "verify_aud": False}
-        )
-        return jsonify({"user": payload}), 200
-    except (StopIteration, JWTError) as e:
-        return jsonify({"msg": f"Token verification failed: {str(e)}"}), 401
+        user_id = get_jwt_identity()
+        return jsonify({"user": {"id": user_id}}), 200
+    except Exception as e:
+        current_app.logger.error("Error in verify_token:", exc_info=True)
+        return jsonify({"msg": "Internal server error", "error": str(e)}), 500
 
 # Debug route to inspect loaded JWT secret
 @auth_bp.route('/debug-secret', methods=['GET'])
