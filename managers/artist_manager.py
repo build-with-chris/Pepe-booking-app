@@ -24,6 +24,7 @@ class ArtistManager:
     def get_artist(self, artist_id):
         """Gibt den Artist mit der angegebenen ID zurück oder None."""
         return Artist.query.get(artist_id)
+        
 
     def get_artist_by_email(self, email):
         """Gibt den Artist mit gegebener E-Mail zurück oder None."""

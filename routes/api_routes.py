@@ -77,6 +77,16 @@ def create_artist():
     return jsonify({'id': artist.id}), 201
 
 
+@api_bp.route('/artists/email/<string:email>', methods=['GET'])
+@jwt_required()
+def get_artist_by_email(email):
+    artist = artist_mgr.get_artist_by_email(email)
+    if not artist:
+        return jsonify({'msg': 'Artist not found'}), 404
+    return jsonify(artist.serialize()), 200
+
+
+
 @api_bp.route('/artists/<int:artist_id>', methods=['DELETE'])
 @jwt_required()
 @swag_from('../resources/swagger/artists_delete.yml')
