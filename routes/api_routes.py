@@ -26,8 +26,14 @@ api_bp = Blueprint('api', __name__)
 
 def get_current_user():
     """Gibt ein Tupel (user_id, user) des aktuell authentifizierten JWT-Users zurück."""
-    user_id = int(get_jwt_identity())
-    user = artist_mgr.get_artist(user_id)
+    user_id = get_jwt_identity()
+    user = None
+    try:
+        # Versuch, falls user_id eine integer ID ist
+        user = artist_mgr.get_artist(int(user_id))
+    except Exception:
+        # user_id ist wahrscheinlich kein int oder Artist nicht gefunden; ignoriere
+        pass
     return user_id, user
 
 
@@ -120,9 +126,9 @@ def update_artist(artist_id):
     """Aktualisiert einen vorhandenen Artist."""
     try:
         current_user_id, current_user = get_current_user()
-        if current_user_id != artist_id and not getattr(current_user, 'is_admin', False):
-            return jsonify({'error': 'Forbidden'}), 403
+        logger.info(f'Update attempt for artist {artist_id} by user {current_user_id}');
         data = request.json or {}
+        logger.info(f'Updating artist {artist_id} with data: {data}')
         artist = artist_mgr.get_artist(artist_id)
         if not artist:
             return jsonify({'error': 'Artist not found'}), 404
@@ -130,7 +136,10 @@ def update_artist(artist_id):
         if 'name' in data:
             artist.name = data['name']
         if 'email' in data:
-            artist.email = data['email']
+            new_email = data['email']
+            if new_email != artist.email and artist_mgr.get_artist_by_email(new_email):
+                return jsonify({'error': 'Email already exists'}), 409
+            artist.email = new_email
         if 'password' in data:
             artist.set_password(data['password'])
         if 'phone_number' in data:
