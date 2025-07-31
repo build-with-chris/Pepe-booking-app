@@ -4,6 +4,7 @@ from datetime import date
 from managers.discipline_manager import DisciplineManager
 from datetime import date, timedelta
 from managers.availability_manager import AvailabilityManager
+from sqlalchemy.exc import IntegrityError
 
 
 class ArtistManager:
@@ -34,29 +35,43 @@ class ArtistManager:
                       phone_number=None, address=None,
                       price_min=1500, price_max=1900, is_admin=False):
         """Legt einen neuen Artist mit Standardverfügbarkeit an."""
-        artist = Artist(
-            name=name,
-            email=email,
-            phone_number=phone_number,
-            address=address,
-            price_min=price_min,
-            price_max=price_max,
-            is_admin=is_admin,
-        )
-        artist.set_password(password)
-        # Disziplinen zuordnen
-        for disc_name in disciplines:
-            disc = self.discipline_mgr.get_or_create_discipline(disc_name)
-            artist.disciplines.append(disc)
-        self.db.session.add(artist)
-        self.db.session.flush()
-        # Standard-Verfügbarkeit: 365 Tage ab heute über AvailabilityManager anlegen
-        today = date.today()
-        for i in range(365):
-            day = today + timedelta(days=i)
-            self.availability_mgr.add_availability(artist.id, day)
-        self.db.session.commit()
-        return artist
+        try:
+            if self.get_artist_by_email(email):
+                raise ValueError('Email already exists')
+
+            artist = Artist(
+                name=name,
+                email=email,
+                phone_number=phone_number,
+                address=address,
+                price_min=price_min,
+                price_max=price_max,
+                is_admin=is_admin,
+            )
+            artist.set_password(password)
+            # Disziplinen zuordnen
+            for disc_name in disciplines:
+                disc = self.discipline_mgr.get_or_create_discipline(disc_name)
+                artist.disciplines.append(disc)
+            self.db.session.add(artist)
+            self.db.session.flush()
+            # Standard-Verfügbarkeit: 365 Tage ab heute über AvailabilityManager anlegen
+            today = date.today()
+            for i in range(365):
+                day = today + timedelta(days=i)
+                self.availability_mgr.add_availability(artist.id, day)
+            self.db.session.commit()
+            return artist
+        except IntegrityError as e:
+            self.db.session.rollback()
+            err_str = str(e).lower()
+            if 'unique' in err_str or 'email' in err_str:
+                raise ValueError('Email already exists')
+            else:
+                raise
+        except Exception:
+            self.db.session.rollback()
+            raise
 
 
     def get_artists_by_discipline(self, disciplines, event_date):
@@ -103,4 +118,3 @@ class ArtistManager:
             self.db.session.commit()
             return True
         return False
-

@@ -6,7 +6,7 @@ from flasgger import swag_from
 from managers.artist_manager import ArtistManager
 from managers.availability_manager import AvailabilityManager
 from managers.booking_requests_manager import BookingRequestManager
-from models import Availability
+from models import Availability, Discipline, db
 import logging
 
 
@@ -57,24 +57,29 @@ def list_artists():
 @swag_from('../resources/swagger/artists_post.yml')
 def create_artist():
     """Legt einen neuen Artist mit den übergebenen Daten an."""
-    data = request.json
-    disciplines = data.get('disciplines')
-    if not disciplines:
-        return jsonify({'error': 'Disciplines must be provided!'}), 400
+    try:
+        data = request.json or {}
+        disciplines = data.get('disciplines')
+        if not disciplines:
+            return jsonify({'error': 'Disciplines must be provided!'}), 400
+        if artist_mgr.get_artist_by_email(data.get('email', '')):
+            return jsonify({'error': 'Email already exists'}), 409
 
-    artist = artist_mgr.create_artist(
-        name=data['name'],
-        email=data['email'],
-        password=data['password'],
-        disciplines=disciplines,
-        phone_number = data.get('phone_number'),
-        address      = data.get('address'),
-        price_min=data.get('price_min', 1500),
-        price_max=data.get('price_max', 1900),
-        is_admin     = data.get('is_admin'),
-        
-    )
-    return jsonify({'id': artist.id}), 201
+        artist = artist_mgr.create_artist(
+            name=data['name'],
+            email=data['email'],
+            password=data['password'],
+            disciplines=disciplines,
+            phone_number=data.get('phone_number'),
+            address=data.get('address'),
+            price_min=data.get('price_min', 1500),
+            price_max=data.get('price_max', 1900),
+            is_admin=data.get('is_admin'),
+        )
+        return jsonify({'id': artist.id}), 201
+    except Exception as e:
+        logger.exception('Failed to create artist')
+        return jsonify({'error': 'Failed to create artist', 'details': str(e)}), 500
 
 
 @api_bp.route('/artists/email/<string:email>', methods=['GET'])
@@ -105,6 +110,51 @@ def delete_artist(artist_id):
         return jsonify({'deleted': artist_id}), 200
 
     return jsonify({'error':'Not found'}), 404
+
+
+# Update Artist endpoint
+@api_bp.route('/artists/<int:artist_id>', methods=['PUT', 'PATCH'])
+@jwt_required()
+@swag_from('../resources/swagger/artists_put.yml')
+def update_artist(artist_id):
+    """Aktualisiert einen vorhandenen Artist."""
+    try:
+        current_user_id, current_user = get_current_user()
+        if current_user_id != artist_id and not getattr(current_user, 'is_admin', False):
+            return jsonify({'error': 'Forbidden'}), 403
+        data = request.json or {}
+        artist = artist_mgr.get_artist(artist_id)
+        if not artist:
+            return jsonify({'error': 'Artist not found'}), 404
+        # Update fields if provided
+        if 'name' in data:
+            artist.name = data['name']
+        if 'email' in data:
+            artist.email = data['email']
+        if 'password' in data:
+            artist.set_password(data['password'])
+        if 'phone_number' in data:
+            artist.phone_number = data['phone_number']
+        if 'address' in data:
+            artist.address = data['address']
+        if 'price_min' in data:
+            artist.price_min = data.get('price_min')
+        if 'price_max' in data:
+            artist.price_max = data.get('price_max')
+        if 'disciplines' in data:
+            def get_or_create_discipline(name):
+                disc = Discipline.query.filter_by(name=name).first()
+                if not disc:
+                    disc = Discipline(name=name)
+                    db.session.add(disc)
+                    db.session.flush()
+                return disc
+            artist.disciplines = [get_or_create_discipline(d) for d in data['disciplines']]
+        db.session.commit()
+        return jsonify({'id': artist.id}), 200
+    except Exception as e:
+        logger.exception('Failed to update artist')
+        return jsonify({'error': 'Failed to update artist', 'details': str(e)}), 500
 
 
 
