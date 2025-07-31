@@ -8,12 +8,14 @@ from routes.admin_routes import admin_bp
 from flasgger import Swagger
 from flask_cors import CORS
 from routes.request_routes import booking_bp
+from flask_migrate import Migrate
 
 
 
 app = Flask(__name__)
 app.config.from_object(Config)
 db.init_app(app)
+migrate = Migrate(app, db)
 
 @app.before_request
 def _skip_jwt_for_options():
