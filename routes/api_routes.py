@@ -60,10 +60,12 @@ def list_artists():
     } for a in artists])
 
 @api_bp.route('/artists', methods=['POST'])
+@jwt_required()
 @swag_from('../resources/swagger/artists_post.yml')
 def create_artist():
     """Legt einen neuen Artist mit den übergebenen Daten an."""
     try:
+        current_user_id = get_jwt_identity()
         data = request.json or {}
         disciplines = data.get('disciplines')
         if not disciplines:
@@ -80,9 +82,14 @@ def create_artist():
             address=data.get('address'),
             price_min=data.get('price_min', 1500),
             price_max=data.get('price_max', 1900),
-            is_admin=data.get('is_admin'),
+            is_admin=data.get('is_admin', False),
+            supabase_user_id=current_user_id,
         )
         return jsonify({'id': artist.id}), 201
+    except ValueError as ve:
+        if 'email already exists' in str(ve).lower():
+            return jsonify({'error': 'Email already exists'}), 409
+        return jsonify({'error': str(ve)}), 400
     except Exception as e:
         logger.exception('Failed to create artist')
         return jsonify({'error': 'Failed to create artist', 'details': str(e)}), 500
@@ -103,18 +110,16 @@ def get_artist_by_email(email):
 @swag_from('../resources/swagger/artists_delete.yml')
 def delete_artist(artist_id):
     """Löscht den eingeloggten Artist, falls er mit der angegebenen ID übereinstimmt."""
-    user_id = get_jwt_identity()
-    # Nur der eingeloggte Artist darf sich selbst löschen
-    if user_id != artist_id:
+    user_supabase_id = get_jwt_identity()
+    artist = artist_mgr.get_artist(artist_id)
+    if not artist:
+        return jsonify({'error':'Not found'}), 404
+    # Only the linked supabase user or admin can delete
+    if not (artist.supabase_user_id == user_supabase_id or (artist and getattr(artist, 'is_admin', False))):
         return jsonify({'error':'Forbidden'}), 403
-
     success = artist_mgr.delete_artist(artist_id)
     if success:
-        # und gleich ausloggen
-        # from flask_login import logout_user
-        # logout_user()
         return jsonify({'deleted': artist_id}), 200
-
     return jsonify({'error':'Not found'}), 404
 
 
@@ -125,13 +130,17 @@ def delete_artist(artist_id):
 def update_artist(artist_id):
     """Aktualisiert einen vorhandenen Artist."""
     try:
-        current_user_id, current_user = get_current_user()
-        logger.info(f'Update attempt for artist {artist_id} by user {current_user_id}');
+        current_user_id = get_jwt_identity()
+        current_user = artist_mgr.get_artist_by_supabase_user_id(current_user_id)
         data = request.json or {}
+        logger.info(f'Update attempt for artist {artist_id} by user {current_user_id}')
         logger.info(f'Updating artist {artist_id} with data: {data}')
         artist = artist_mgr.get_artist(artist_id)
         if not artist:
             return jsonify({'error': 'Artist not found'}), 404
+        # Ownership: only admin or linked supabase_user_id can update
+        if not (getattr(current_user, 'is_admin', False) or artist.supabase_user_id == current_user_id):
+            return jsonify({'error': 'Forbidden'}), 403
         # Update fields if provided
         if 'name' in data:
             artist.name = data['name']

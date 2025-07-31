@@ -43,6 +43,7 @@ class Artist(UserMixin, db.Model):
     is_admin       = db.Column(db.Boolean, default=False)
     price_min      = db.Column(db.Integer, default=1500)
     price_max      = db.Column(db.Integer, default=1900)
+    supabase_user_id = db.Column(db.String(255), unique=True, nullable=True)
 
     # Beziehung: Ein Artist kann mehrere Disziplinen haben, und jede Disziplin kann mehreren Artists zugeordnet sein.
     disciplines    = db.relationship(

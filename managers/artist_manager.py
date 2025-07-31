@@ -33,7 +33,7 @@ class ArtistManager:
 
     def create_artist(self, name, email, password, disciplines,
                       phone_number=None, address=None,
-                      price_min=1500, price_max=1900, is_admin=False):
+                      price_min=1500, price_max=1900, is_admin=False, supabase_user_id=None):
         """Legt einen neuen Artist mit Standardverfügbarkeit an."""
         try:
             if self.get_artist_by_email(email):
@@ -47,6 +47,7 @@ class ArtistManager:
                 price_min=price_min,
                 price_max=price_max,
                 is_admin=is_admin,
+                supabase_user_id=supabase_user_id,
             )
             artist.set_password(password)
             # Disziplinen zuordnen
@@ -73,6 +74,10 @@ class ArtistManager:
             self.db.session.rollback()
             raise
 
+
+    def get_artist_by_supabase_user_id(self, supabase_user_id):
+        """Gibt den Artist zurück, der mit der Supabase user_id verknüpft ist."""
+        return Artist.query.filter_by(supabase_user_id=supabase_user_id).first()
 
     def get_artists_by_discipline(self, disciplines, event_date):
         """
