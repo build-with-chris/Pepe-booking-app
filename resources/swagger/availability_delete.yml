@@ -1,21 +1,20 @@
----
+summary: Verfügbarkeitstag löschen
+description: |
+  Löscht einen bestimmten Verfügbarkeitstag des aktuell eingeloggten Artists. Nur der zugehörige Artist oder ein Admin mit Berechtigung kann diesen Slot entfernen.
 tags:
-  - Availability
-summary: Delete an availability slot
-description: Deletes a specific availability slot of the logged-in artist.
-parameters:
-  - name: slot_id
-    in: path
-    required: true
-    schema:
-      type: integer
-    description: ID of the availability slot to delete
-operationId: api.remove_availability
+  - availability
 security:
   - Bearer: []
+parameters:
+  - in: path
+    name: slot_id
+    required: true
+    description: ID des Verfügbarkeitsslots, das gelöscht werden soll
+    schema:
+      type: integer
 responses:
-  '200':
-    description: Slot deleted successfully
+  200:
+    description: Slot erfolgreich gelöscht
     content:
       application/json:
         schema:
@@ -24,7 +23,41 @@ responses:
             deleted:
               type: integer
               example: 42
-  '403':
-    description: Forbidden – user not allowed to delete this slot
-  '404':
-    description: Slot not found
+  400:
+    description: Ungültiger Request (z. B. falsche ID)
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+  403:
+    description: Forbidden – der eingeloggte Benutzer darf diesen Slot nicht löschen
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+  404:
+    description: Slot nicht gefunden
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+  default:
+    description: Unerwarteter Fehler
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+            details:
+              type: string

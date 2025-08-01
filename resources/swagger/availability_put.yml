@@ -1,0 +1,66 @@
+
+summary: Ersetze die Verfügbarkeiten eines Artists komplett
+description: |
+  Nimmt eine Liste von ISO-Datum-Strings (YYYY-MM-DD) und synchronisiert die Verfügbarkeiten des aktuell angemeldeten Artists.\n  Es werden nur die Differenzen angewendet: neue Tage werden hinzugefügt, nicht mehr gewünschte entfernt.
+tags:
+  - availability
+consumes:
+  - application/json
+produces:
+  - application/json
+security:
+  - Bearer: []
+parameters:
+  - in: body
+    name: body
+    required: true
+    schema:
+      type: object
+      required:
+        - dates
+      properties:
+        dates:
+          type: array
+          items:
+            type: string
+            format: date
+          description: Liste der Tage im Format YYYY-MM-DD, die nach dem Sync verfügbar sein sollen.
+responses:
+  200:
+    description: Ergebnis der Synchronisation
+    schema:
+      type: object
+      properties:
+        added:
+          type: array
+          items:
+            type: integer
+          description: IDs der hinzugefügten Verfügbarkeits-Slots
+        removed:
+          type: array
+          items:
+            type: integer
+          description: IDs der entfernten Verfügbarkeits-Slots
+  400:
+    description: Ungültiger Request (z.B. fehlt "dates")
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+  403:
+    description: Kein verknüpfter Artist oder keine Berechtigung
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+  default:
+    description: Unerwarteter Fehler
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: string

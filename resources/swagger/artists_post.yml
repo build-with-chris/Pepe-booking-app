@@ -59,3 +59,104 @@ parameters:
 responses:
   201:
     description: Artist created
+summary: Neuen Artist erstellen
+description: |
+  Legt einen neuen Artist an. Erfordert Authentifizierung. Die E-Mail darf noch nicht existieren. Disziplinen müssen angegeben werden.
+  Allowed Disciplines: Zauberer, Cyr-Wheel, Bodenakrobatik, Luftakrobatik, Partnerakrobatik, Chinese Pole, Hula Hoop, Handstand, Contemporary Dance, Breakdance, Teeterboard, Jonglage, Moderation, Pantomime/Entertainment
+tags:
+  - artists
+security:
+  - Bearer: []
+requestBody:
+  required: true
+  content:
+    application/json:
+      schema:
+        type: object
+        required:
+          - name
+          - email
+          - password
+          - disciplines
+        properties:
+          name:
+            type: string
+          email:
+            type: string
+          password:
+            type: string
+          disciplines:
+            type: array
+            items:
+              type: string
+              enum:
+                - Zauberer
+                - Cyr-Wheel
+                - Bodenakrobatik
+                - Luftakrobatik
+                - Partnerakrobatik
+                - Chinese Pole
+                - Hula Hoop
+                - Handstand
+                - Contemporary Dance
+                - Breakdance
+                - Teeterboard
+                - Jonglage
+                - Moderation
+                - Pantomime/Entertainment
+          phone_number:
+            type: string
+          address:
+            type: string
+          price_min:
+            type: integer
+          price_max:
+            type: integer
+          is_admin:
+            type: boolean
+      examples:
+        single:
+          value:
+            name: "Christoph Hermann"
+            email: "chris@beispiel.de"
+            password: "securepassword"
+            disciplines: ["Cyr-Wheel"]
+responses:
+  201:
+    description: Artist erfolgreich erstellt
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            id:
+              type: integer
+  400:
+    description: Ungültige Eingabedaten
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+  409:
+    description: E-Mail existiert bereits
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+  default:
+    description: Unerwarteter Fehler
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+            details:
+              type: string

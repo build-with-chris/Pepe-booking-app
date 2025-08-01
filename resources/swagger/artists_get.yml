@@ -1,19 +1,38 @@
+summary: Liste aller Artists
+description: |
+  Gibt alle registrierten Artists zurück. Jeder Artist enthält die grundlegenden Informationen wie Name, E-Mail, Telefonnummer und Disziplinen.
 tags:
-      - Artists
+  - artists
 responses:
   200:
-    description: A list of artists
-    schema:
-      type: array
-      items:
-        properties:
-          id:
-            type: integer
-          name:
-            type: string
-          email:
-            type: string
-          phone_number:
-            type: string
-          discipline:
-            type: string
+    description: Eine Liste von Artists
+    content:
+      application/json:
+        schema:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+              email:
+                type: string
+              phone_number:
+                type: string
+              disciplines:
+                type: array
+                items:
+                  type: string
+  default:
+    description: Unerwarteter Fehler
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+            details:
+              type: string

@@ -1,18 +1,69 @@
-tags:
-  - Availability
+summary: Verfügbarkeitsdatum(e) hinzufügen
 description: |
-  Add a new availability date for an artist. By default, artists are available every day for the next year.
-  Use this endpoint to add back a day if it was removed.
+  Fügt einen oder mehrere Verfügbarkeitstage für den aktuell angemeldeten Artist hinzu.\n  Erwartet eine Liste von Objekten mit ISO-Datum-Strings (YYYY-MM-DD).\n  Alternativ kann ein einzelnes Objekt mit einem Datum gesendet werden.\n  Bereits vorhandene Kombinationen werden ignoriert (idempotent).
+tags:
+  - availability
+security:
+  - Bearer: []
 parameters:
-  - name: body
-    in: body
+  - in: body
+    name: body
     required: true
     schema:
-      type: object
-      properties:
-        date:
-          type: string
-          default: '2025-12-31'
+      oneOf:
+        - type: object
+          required:
+            - date
+          properties:
+            date:
+              type: string
+              format: date
+              description: Datum im Format YYYY-MM-DD
+        - type: array
+          items:
+            type: object
+            required:
+              - date
+            properties:
+              date:
+                type: string
+                format: date
+                description: Datum im Format YYYY-MM-DD
 responses:
   201:
     description: Availability slot(s) added successfully
+    schema:
+      type: array
+      items:
+        type: object
+        properties:
+          id:
+            type: integer
+          artist_id:
+            type: integer
+          date:
+            type: string
+            format: date
+  400:
+    description: Ungültiger Request (z.B. fehlt "date" oder falsches Format)
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+  403:
+    description: Kein verknüpfter Artist oder keine Berechtigung
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+  default:
+    description: Unerwarteter Fehler
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: string
