@@ -218,12 +218,28 @@ def get_availability():
 @jwt_required()
 @swag_from('../resources/swagger/availability_post.yml')
 def add_availability():
-    """Fügt einen oder mehrere Verfügbarkeitstage für den eingeloggten Artist hinzu."""
+    """Fügt einen oder mehrere Verfügbarkeitstage für den eingeloggten Artist hinzu (oder, wenn admin, für einen anderen über artist_id)."""
     current_supabase_id = get_jwt_identity()
     current_artist = artist_mgr.get_artist_by_supabase_user_id(current_supabase_id)
     if not current_artist:
         return jsonify({'error': 'Current user not linked to an artist'}), 403
-    artist_id = current_artist.id
+
+    # resolve target artist (optional override for admin)
+    artist_id_param = request.args.get('artist_id')
+    target_artist = current_artist
+    if artist_id_param:
+        try:
+            artist_id_int = int(artist_id_param)
+        except ValueError:
+            return jsonify({'error': 'artist_id must be integer'}), 400
+        candidate = artist_mgr.get_artist(artist_id_int)
+        if not candidate:
+            return jsonify({'error': 'Artist not found'}), 404
+        if candidate.id != current_artist.id and not getattr(current_artist, 'is_admin', False):
+            return jsonify({'error': 'Forbidden'}), 403
+        target_artist = candidate
+
+    artist_id = target_artist.id
     data = request.get_json()
     if not data:
         return jsonify({'error': 'Date must be provided'}), 400
@@ -241,7 +257,6 @@ def add_availability():
         return {'id': slot.id, 'date': slot.date.isoformat()}
 
     slots = []
-
     if isinstance(data, list):
         try:
             for item in data:
@@ -264,15 +279,31 @@ def add_availability():
 @jwt_required()
 @swag_from('../resources/swagger/availability_put.yml')
 def replace_availability():
-    """Ersetzt die Verfügbarkeiten des eingeloggten Artists komplett mit der übergebenen Liste von dates."""
+    """Ersetzt die Verfügbarkeiten des eingeloggten Artists komplett mit der übergebenen Liste von dates (oder, wenn admin, eines anderen Artists via artist_id)."""
     current_supabase_id = get_jwt_identity()
     current_artist = artist_mgr.get_artist_by_supabase_user_id(current_supabase_id)
     if not current_artist:
         return jsonify({'error': 'Current user not linked to an artist'}), 403
+
+    # resolve target artist (optional override for admin)
+    artist_id_param = request.args.get('artist_id')
+    target_artist = current_artist
+    if artist_id_param:
+        try:
+            artist_id_int = int(artist_id_param)
+        except ValueError:
+            return jsonify({'error': 'artist_id must be integer'}), 400
+        candidate = artist_mgr.get_artist(artist_id_int)
+        if not candidate:
+            return jsonify({'error': 'Artist not found'}), 404
+        if candidate.id != current_artist.id and not getattr(current_artist, 'is_admin', False):
+            return jsonify({'error': 'Forbidden'}), 403
+        target_artist = candidate
+
     data = request.get_json()
     if not data or 'dates' not in data:
         return jsonify({'error': 'dates list required'}), 400
-    result = avail_mgr.replace_availabilities_for_artist(current_artist.id, data['dates'])
+    result = avail_mgr.replace_availabilities_for_artist(target_artist.id, data['dates'])
     return jsonify(result), 200
 
 
@@ -280,14 +311,17 @@ def replace_availability():
 @jwt_required()
 @swag_from('../resources/swagger/availability_delete.yml')
 def remove_availability(slot_id):
-    """Entfernt einen Verfügbarkeitstag des eingeloggten Artists anhand der ID."""
+    """Entfernt einen Verfügbarkeitstag des eingeloggten Artists anhand der ID. Admins können auch andere löschen."""
     logger.debug(f"remove_availability called with slot_id={slot_id}")
     current_supabase_id = get_jwt_identity()
     current_artist = artist_mgr.get_artist_by_supabase_user_id(current_supabase_id)
     if not current_artist:
         return jsonify({'error': 'Current user not linked to an artist'}), 403
     slot = Availability.query.get(slot_id)
-    if not slot or slot.artist_id != current_artist.id:
+    if not slot:
+        return jsonify({'error': 'Not found'}), 404
+    # permission: owner or admin
+    if slot.artist_id != current_artist.id and not getattr(current_artist, 'is_admin', False):
         return jsonify({'error': 'Forbidden'}), 403
     avail_mgr.remove_availability(slot_id)
     return jsonify({'deleted': slot_id})
