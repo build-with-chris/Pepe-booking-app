@@ -105,6 +105,9 @@ class BookingRequest(db.Model):
 class Availability(db.Model):
     """Verfügbarkeitstag eines Artists für (ganztägige) Buchungen."""
     __tablename__ = 'availabilities'
+    __table_args__ = (
+        db.UniqueConstraint('artist_id', 'date', name='uq_artist_date'),
+    )
     id           = db.Column(db.Integer, primary_key=True)
     artist_id    = db.Column(db.Integer, db.ForeignKey('artists.id'), nullable=False)
     date         = db.Column(db.Date, nullable=False)  # full-day availability slot
