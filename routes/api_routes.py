@@ -181,9 +181,37 @@ def update_artist(artist_id):
 @jwt_required()
 @swag_from('../resources/swagger/availability_get.yml')
 def get_availability():
-    """Gibt alle Verfügbarkeitstage des eingeloggten Artists zurück."""
-    user_id = get_jwt_identity()
-    slots = avail_mgr.get_availabilities(user_id)
+    """Gibt alle Verfügbarkeitstage des eingeloggten Artists zurück oder, falls angegeben, eines anderen Artists (mit Berechtigung)."""
+    current_supabase_id = get_jwt_identity()
+
+    # Determine target artist: optional artist_id query param
+    artist_id_param = request.args.get('artist_id')
+    target_artist = None
+
+    if artist_id_param:
+        try:
+            artist_id_int = int(artist_id_param)
+        except ValueError:
+            return jsonify({'error': 'artist_id must be integer'}), 400
+        artist_candidate = artist_mgr.get_artist(artist_id_int)
+        if not artist_candidate:
+            return jsonify({'error': 'Artist not found'}), 404
+        # current user’s linked artist (by supabase_user_id)
+        current_artist = artist_mgr.get_artist_by_supabase_user_id(current_supabase_id)
+        if not current_artist:
+            return jsonify({'error': 'Current user not linked to an artist'}), 403
+        # allow if same artist or current is admin
+        if artist_candidate.id != current_artist.id and not getattr(current_artist, 'is_admin', False):
+            return jsonify({'error': 'Forbidden'}), 403
+        target_artist = artist_candidate
+    else:
+        # no artist_id param: use the current linked artist
+        current_artist = artist_mgr.get_artist_by_supabase_user_id(current_supabase_id)
+        if not current_artist:
+            return jsonify({'error': 'Artist not found for current user'}), 404
+        target_artist = current_artist
+
+    slots = avail_mgr.get_availabilities(target_artist.id)
     return jsonify([{'id': s.id, 'date': s.date.isoformat()} for s in slots])
 
 @api_bp.route('/availability', methods=['POST'])
