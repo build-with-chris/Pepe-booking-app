@@ -173,32 +173,45 @@ def update_artist(artist_id):
 def get_availability():
     """Gibt alle Verfügbarkeitstage des eingeloggten Artists zurück oder, falls angegeben, eines anderen Artists (mit Berechtigung)."""
     current_supabase_id = get_jwt_identity()
+    logger.debug(f"get_availability called by supabase_user_id={current_supabase_id} with args={request.args}")
 
     artist_id_param = request.args.get('artist_id')
     target_artist = None
+
+    # resolve current artist from token (if any)
+    current_artist = artist_mgr.get_artist_by_supabase_user_id(current_supabase_id)
+    if not current_artist:
+        logger.warning(f"Current user {current_supabase_id} not linked to an artist")
+        return jsonify({'error': 'Current user not linked to an artist'}), 403
 
     if artist_id_param:
         try:
             artist_id_int = int(artist_id_param)
         except ValueError:
+            logger.warning(f"Invalid artist_id parameter: {artist_id_param}")
             return jsonify({'error': 'artist_id must be integer'}), 400
         artist_candidate = artist_mgr.get_artist(artist_id_int)
         if not artist_candidate:
+            logger.warning(f"Artist candidate not found for id {artist_id_int}")
             return jsonify({'error': 'Artist not found'}), 404
-        current_artist = artist_mgr.get_artist_by_supabase_user_id(current_supabase_id)
-        if not current_artist:
-            return jsonify({'error': 'Current user not linked to an artist'}), 403
+        # permission check: either same artist or admin
         if artist_candidate.id != current_artist.id and not getattr(current_artist, 'is_admin', False):
+            logger.warning(f"User {current_supabase_id} forbidden from viewing availability of artist {artist_candidate.id}")
             return jsonify({'error': 'Forbidden'}), 403
         target_artist = artist_candidate
     else:
-        current_artist = artist_mgr.get_artist_by_supabase_user_id(current_supabase_id)
-        if not current_artist:
-            return jsonify({'error': 'Artist not found for current user'}), 404
         target_artist = current_artist
 
-    slots = avail_mgr.get_availabilities(target_artist.id)
-    return jsonify([{'id': s.id, 'artist_id': s.artist_id, 'date': s.date.isoformat()} for s in slots])
+    # fetch and return slots
+    try:
+        slots = avail_mgr.get_availabilities(target_artist.id)
+    except Exception as e:
+        logger.exception(f"Failed to fetch availabilities for artist {target_artist.id}")
+        return jsonify({'error': 'Failed to fetch availabilities', 'details': str(e)}), 500
+
+    result = [{'id': s.id, 'artist_id': s.artist_id, 'date': s.date.isoformat()} for s in slots]
+    logger.debug(f"Returning {len(result)} availability slots for artist {target_artist.id}")
+    return jsonify(result)
 
 
 @api_bp.route('/availability', methods=['POST'])
