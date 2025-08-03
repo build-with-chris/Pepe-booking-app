@@ -60,9 +60,6 @@ with app.app_context():
     if hasattr(models, 'generate_password_hash'):
         try:
             password_hash = models.generate_password_hash('changeme')
-            if password_hash and len(password_hash) > 128:
-                logging.warning('password_hash zu lang, kürze auf 128 Zeichen')
-                password_hash = password_hash[:128]
         except Exception:
             logging.warning('Konnte password_hash nicht generieren')
     artist = Artist(
