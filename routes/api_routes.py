@@ -167,6 +167,7 @@ def update_artist(artist_id):
 
 
 # Availability
+
 @api_bp.route('/availability', methods=['GET'])
 @jwt_required()
 @swag_from('../resources/swagger/availability_get.yml')
@@ -176,38 +177,36 @@ def get_availability():
     logger.debug(f"get_availability called by supabase_user_id={current_supabase_id} with args={request.args}")
 
     artist_id_param = request.args.get('artist_id')
-    target_artist = None
 
-    # resolve current artist from token (if any)
+    # resolve current artist from token
     current_artist = artist_mgr.get_artist_by_supabase_user_id(current_supabase_id)
     if not current_artist:
         logger.warning(f"Current user {current_supabase_id} not linked to an artist")
         return jsonify({'error': 'Current user not linked to an artist'}), 403
 
+    target_artist = current_artist
     if artist_id_param:
         try:
             artist_id_int = int(artist_id_param)
+            artist_candidate = artist_mgr.get_artist(artist_id_int)
+            if artist_candidate:
+                # permission: same artist or admin
+                if artist_candidate.id != current_artist.id and not getattr(current_artist, 'is_admin', False):
+                    logger.warning(f"User {current_supabase_id} forbidden from viewing availability of artist {artist_candidate.id}")
+                    return jsonify({'error': 'Forbidden'}), 403
+                target_artist = artist_candidate
+            else:
+                logger.warning(f"Artist candidate not found for id {artist_id_int}, falling back to current artist")
+            
         except ValueError:
-            logger.warning(f"Invalid artist_id parameter: {artist_id_param}")
-            return jsonify({'error': 'artist_id must be integer'}), 400
-        artist_candidate = artist_mgr.get_artist(artist_id_int)
-        if not artist_candidate:
-            logger.warning(f"Artist candidate not found for id {artist_id_int}")
-            return jsonify({'error': 'Artist not found'}), 404
-        # permission check: either same artist or admin
-        if artist_candidate.id != current_artist.id and not getattr(current_artist, 'is_admin', False):
-            logger.warning(f"User {current_supabase_id} forbidden from viewing availability of artist {artist_candidate.id}")
-            return jsonify({'error': 'Forbidden'}), 403
-        target_artist = artist_candidate
-    else:
-        target_artist = current_artist
-
-    # fetch and return slots
+            logger.warning(f"Invalid artist_id parameter: {artist_id_param}, ignoring and using current artist")
+    
+    # fetch and return slots: if target is current artist use user-specific helper for better handling
     try:
-        if artist_id_param:
-            slots = avail_mgr.get_availabilities(target_artist.id)
-        else:
+        if target_artist.id == current_artist.id:
             slots = avail_mgr.get_availabilities_for_user(current_supabase_id)
+        else:
+            slots = avail_mgr.get_availabilities(target_artist.id)
     except Exception as e:
         logger.exception(f"Failed to fetch availabilities for artist {target_artist.id}")
         return jsonify({'error': 'Failed to fetch availabilities', 'details': str(e)}), 500
