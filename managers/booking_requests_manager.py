@@ -49,6 +49,8 @@ class BookingRequestManager:
         newsletter_opt_in=False
     ):
         """Erstellt eine neue Buchungsanfrage und verknüpft sie mit Artists."""
+        current_app.logger.info(f"create_request called with client={client_name}, disciplines={show_discipline}, artists={[getattr(a, 'id', a) for a in artists]}")
+
         # Datum und Zeit konvertieren
         if isinstance(event_date, str):
             event_date = date.fromisoformat(event_date)
@@ -97,6 +99,7 @@ class BookingRequestManager:
 
     def set_offer(self, request_id, artist_id, price_offered):
         """Speichert ein Angebot und aktualisiert den Status bei Solo oder nach vollständigen Angeboten."""
+        current_app.logger.info(f"set_offer called for request_id={request_id}, artist_id={artist_id}, price_offered={price_offered}")
         # Angebot in Assoziationstabelle speichern
         self.db.session.execute(
             booking_artists.update()
@@ -160,6 +163,7 @@ class BookingRequestManager:
         Gibt zukünftige Buchungsanfragen zurück, die für den angegebenen Artist empfohlen werden,
         inklusive einer empfohlenen Preis-Spanne auf Basis von Artist-Parametern.
         """
+        current_app.logger.info(f"get_requests_for_artist_with_recommendation called for artist_id={artist_id}")
         try:
             aid = int(artist_id)
         except (TypeError, ValueError):
@@ -167,13 +171,18 @@ class BookingRequestManager:
 
         artist = Artist.query.get(aid)
         if not artist:
+            current_app.logger.warning(f"No artist found with id={aid}")
             return []
+
+        all_requests = self.get_all_requests()
+        current_app.logger.info(f"Total requests in system: {len(all_requests)}")
 
         # Filtert Anfragen, in denen der Artist mitgewirkt hat
         relevant = [
-            r for r in self.get_all_requests()
+            r for r in all_requests
             if any(a.id == aid for a in r.artists)
         ]
+        current_app.logger.info(f"Relevant requests for artist {aid}: {[r.id for r in relevant]}")
 
         result = []
         for r in relevant:
@@ -195,6 +204,7 @@ class BookingRequestManager:
                 duration=r.duration_minutes,
                 event_address=r.event_address
             )
+            current_app.logger.info(f"Calculated recommendation for request {r.id}: min={rec_min}, max={rec_max}")
             result.append({
                 'id': r.id,
                 'client_name': r.client_name,

@@ -9,11 +9,18 @@ from flasgger import Swagger
 from flask_cors import CORS
 from routes.request_routes import booking_bp
 from flask_migrate import Migrate
+import logging
 
 
 
 app = Flask(__name__)
 app.config.from_object(Config)
+# Hilfsfunktion: Passwort in der DB-URL maskieren für Logs
+def mask_db_uri(uri: str) -> str:
+    import re
+    return re.sub(r'(://[^:]+:)([^@]+)(@)', r"\1****\3", uri)
+
+logging.getLogger().info(f"Using DB URI: {mask_db_uri(app.config.get('SQLALCHEMY_DATABASE_URI',''))}")
 db.init_app(app)
 migrate = Migrate(app, db)
 

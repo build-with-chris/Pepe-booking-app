@@ -2,7 +2,7 @@ summary: Liste aller Artists
 description: |
   Gibt alle registrierten Artists zurück. Jeder Artist enthält die grundlegenden Informationen wie Name, E-Mail, Telefonnummer und Disziplinen.
 tags:
-  - artists
+  - Artists
 responses:
   200:
     description: Eine Liste von Artists
