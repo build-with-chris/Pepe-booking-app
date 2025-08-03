@@ -1,5 +1,5 @@
 import logging
-from models import db, Availability
+from models import db, Availability, Artist
 from datetime import date as _date
 from sqlalchemy.exc import IntegrityError
 
@@ -115,3 +115,27 @@ class AvailabilityManager:
             'added': [s.id for s in added],
             'removed': [s.id for s in removed],
         }
+
+    def get_availabilities_for_user(self, supabase_user_id):
+        """Shortcut: Verfügbarkeiten für den eingeloggten Artist über Supabase-ID laden."""
+        try:
+            artist = Artist.query.filter_by(supabase_user_id=supabase_user_id).first()
+            if not artist:
+                logger.warning('Kein Artist für supabase_user_id=%s gefunden', supabase_user_id)
+                return []
+            return self.get_availabilities(artist.id)
+        except Exception:
+            logger.exception('Fehler beim Laden der Availabilities für supabase_user_id=%s', supabase_user_id)
+            return []
+
+    def replace_availabilities_for_user(self, supabase_user_id, new_dates):
+        """Shortcut: Verfügbarkeiten für den eingeloggten Artist über Supabase-ID ersetzen."""
+        try:
+            artist = Artist.query.filter_by(supabase_user_id=supabase_user_id).first()
+            if not artist:
+                logger.warning('Kein Artist für supabase_user_id=%s gefunden', supabase_user_id)
+                return {'added': [], 'removed': []}
+            return self.replace_availabilities_for_artist(artist.id, new_dates)
+        except Exception:
+            logger.exception('Fehler beim Ersetzen der Availabilities für supabase_user_id=%s', supabase_user_id)
+            return {'added': [], 'removed': []}

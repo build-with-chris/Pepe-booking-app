@@ -158,6 +158,38 @@ class BookingRequestManager:
         """
         return BookingRequest.query.filter(BookingRequest.price_offered.isnot(None)).all()
 
+    def get_requests_for_artist(self, artist_id):
+        """Gibt Buchungsanfragen zurück, in denen der Artist beteiligt ist. (Debug: ohne Datumseinschränkung)"""
+        try:
+            aid = int(artist_id)
+        except (TypeError, ValueError):
+            current_app.logger.warning(f"Invalid artist_id passed to get_requests_for_artist: {artist_id}")
+            return []
+
+        query = (
+            BookingRequest.query
+            .join(booking_artists, booking_artists.c.booking_id == BookingRequest.id)
+            .filter(booking_artists.c.artist_id == aid)
+            .filter(BookingRequest.status.in_(["angefragt", "requested"]))
+        )
+        results = query.all()
+        current_app.logger.debug(f"get_requests_for_artist: artist_id={aid}, found {[r.id for r in results]}")
+        if not results:
+            # zusätzliche Diagnose: was ist in der Assoziationstabelle?
+            assoc_rows = self.db.session.execute(
+                booking_artists.select().where(booking_artists.c.artist_id == aid)
+            ).fetchall()
+            current_app.logger.debug(f"booking_artists rows for artist {aid}: {assoc_rows}")
+            # nochmal alle verknüpften Requests ohne Statusfilter
+            fallback = (
+                BookingRequest.query
+                .join(booking_artists, booking_artists.c.booking_id == BookingRequest.id)
+                .filter(booking_artists.c.artist_id == aid)
+                .all()
+            )
+            current_app.logger.debug(f"Fallback linked requests for artist {aid} (no status filter): {[r.id for r in fallback]}")
+        return results
+
     def get_requests_for_artist_with_recommendation(self, artist_id):
         """
         Gibt zukünftige Buchungsanfragen zurück, die für den angegebenen Artist empfohlen werden,
@@ -174,19 +206,11 @@ class BookingRequestManager:
             current_app.logger.warning(f"No artist found with id={aid}")
             return []
 
-        all_requests = self.get_all_requests()
-        current_app.logger.info(f"Total requests in system: {len(all_requests)}")
-
-        # Filtert Anfragen, in denen der Artist mitgewirkt hat
-        relevant = [
-            r for r in all_requests
-            if any(a.id == aid for a in r.artists)
-        ]
+        relevant = self.get_requests_for_artist(aid)
         current_app.logger.info(f"Relevant requests for artist {aid}: {[r.id for r in relevant]}")
 
         result = []
         for r in relevant:
-            # Berechnung der empfohlenen Gage ohne Agentur-Gebühren oder Extras
             rec_min, rec_max = calculate_price(
                 base_min=artist.price_min,
                 base_max=artist.price_max,

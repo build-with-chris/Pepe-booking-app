@@ -25,14 +25,14 @@ api_bp = Blueprint('api', __name__)
 
 
 def get_current_user():
-    """Gibt ein Tupel (user_id, user) des aktuell authentifizierten JWT-Users zurück."""
+    """Gibt ein Tupel (user_id, artist) des aktuell authentifizierten JWT-Users zurück (über supabase_user_id)."""
     user_id = get_jwt_identity()
-    user = None
+    artist = None
     try:
-        user = artist_mgr.get_artist(int(user_id))
+        artist = artist_mgr.get_artist_by_supabase_user_id(user_id)
     except Exception:
         pass
-    return user_id, user
+    return user_id, artist
 
 
 @api_bp.route('/greet')
@@ -204,7 +204,10 @@ def get_availability():
 
     # fetch and return slots
     try:
-        slots = avail_mgr.get_availabilities(target_artist.id)
+        if artist_id_param:
+            slots = avail_mgr.get_availabilities(target_artist.id)
+        else:
+            slots = avail_mgr.get_availabilities_for_user(current_supabase_id)
     except Exception as e:
         logger.exception(f"Failed to fetch availabilities for artist {target_artist.id}")
         return jsonify({'error': 'Failed to fetch availabilities', 'details': str(e)}), 500
@@ -303,7 +306,10 @@ def replace_availability():
     data = request.get_json()
     if not data or 'dates' not in data:
         return jsonify({'error': 'dates list required'}), 400
-    result = avail_mgr.replace_availabilities_for_artist(target_artist.id, data['dates'])
+    if artist_id_param:
+        result = avail_mgr.replace_availabilities_for_artist(target_artist.id, data['dates'])
+    else:
+        result = avail_mgr.replace_availabilities_for_user(current_supabase_id, data['dates'])
     return jsonify(result), 200
 
 
@@ -325,3 +331,26 @@ def remove_availability(slot_id):
         return jsonify({'error': 'Forbidden'}), 403
     avail_mgr.remove_availability(slot_id)
     return jsonify({'deleted': slot_id})
+@api_bp.route('/requests/requests', methods=['GET'])
+@jwt_required()
+def list_my_booking_requests():
+    """Gibt die für den eingeloggten Artist relevanten BookingRequests zurück (mit Empfehlung)."""
+    user_id = get_jwt_identity()
+    logger.debug(f"list_my_booking_requests called with supabase_user_id={user_id}")
+    artist = artist_mgr.get_artist_by_supabase_user_id(user_id)
+    if not artist:
+        logger.warning(f"Current user {user_id} not linked to an artist")
+        return jsonify({'error': 'Current user not linked to an artist'}), 403
+    logger.debug(f"Resolved artist: id={artist.id}, supabase_user_id={artist.supabase_user_id}")
+    requests = request_mgr.get_requests_for_artist_with_recommendation(artist.id)
+
+    # Fallback-Diagnose: wenn keine empfohlenen Anfragen, hole die rohen verknüpften Requests
+    if not requests:
+        raw_reqs = request_mgr.get_requests_for_artist(artist.id)
+        logger.debug(f"Raw get_requests_for_artist returned: {[r.id for r in raw_reqs]}")
+    try:
+        request_ids = [r.get('id') if isinstance(r, dict) else getattr(r, 'id', None) for r in requests]
+    except Exception:
+        request_ids = str(requests)
+    logger.debug(f"list_my_booking_requests result count={len(requests)} ids={request_ids}")
+    return jsonify(requests), 200
