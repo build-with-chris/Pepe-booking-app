@@ -55,16 +55,19 @@ def run_migrations_offline():
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
-        dialect_opts={"paramstyle": "named"},
+        dialect_opts={'paramstyle': 'named'},
     )
     with context.begin_transaction():
         context.run_migrations()
 
 
 def run_migrations_online():
+    if target_metadata is None:
+        logger.error('Keine target_metadata verfügbar, Migration abgebrochen.')
+        raise RuntimeError('target_metadata is None')
     connectable = engine_from_config(
         config.get_section(config.config_ini_section),
-        prefix='',
+        prefix='sqlalchemy.',
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
