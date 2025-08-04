@@ -75,7 +75,7 @@ class BookingRequest(db.Model):
 
     event_type         = db.Column(db.String(50), nullable=False)   # z.B. privat
     show_type          = db.Column(db.String(50), nullable=False)  # z.B. Walking Act oder Bühnen Show
-    show_discipline    = db.Column(db.String(20), nullable=False)
+    show_discipline    = db.Column(db.String(255), nullable=False)
     team_size          = db.Column(db.String(10), nullable=False)   
     number_of_guests   = db.Column(db.Integer, nullable=True)       
     event_address      = db.Column(db.String(200), nullable=True)   
