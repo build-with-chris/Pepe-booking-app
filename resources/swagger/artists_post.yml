@@ -1,70 +1,9 @@
+summary: Neuen Artist erstellen
 tags:
   - Artists
-description: 
-  Create a new artist.
-
-  Allowed Disciplines: Zauberer, Cyr-Wheel, Bodenakrobatik, Luftakrobatik, Partnerakrobatik, Chinese Pole, Hula Hoop, Handstand, Contemporary Dance, Breakdance, Teeterboard, Jonglage, Moderation, Pantomime/Entertainment
-parameters:
-  - name: body
-    in: body
-    required: true
-    schema:
-      type: object
-      required:
-        - name
-        - email
-        - password
-        - disciplines
-      properties:
-        name:
-          type: string
-        email:
-          type: string
-        password:
-          type: string
-        phone_number:
-          type: string
-        address:
-          type: string
-        is_admin:
-          type: boolean
-          default: false
-        price_min:
-          type: integer
-          default: 500
-        price_max:
-          type: integer
-          default: 2000
-        disciplines:
-          type: array
-          items:
-            type: string
-            enum:
-              - Zauberer
-              - Cyr-Wheel
-              - Bodenakrobatik
-              - Luftakrobatik
-              - Partnerakrobatik
-              - Chinese Pole
-              - Hula Hoop
-              - Handstand
-              - Contemporary Dance
-              - Breakdance
-              - Teeterboard
-              - Jonglage
-              - Moderation
-              - Pantomime/Entertainment
-          example:
-            - Cyr-Wheel
-responses:
-  201:
-    description: Artist created
-summary: Neuen Artist erstellen
 description: |
   Legt einen neuen Artist an. Erfordert Authentifizierung. Die E-Mail darf noch nicht existieren. Disziplinen müssen angegeben werden.
   Allowed Disciplines: Zauberer, Cyr-Wheel, Bodenakrobatik, Luftakrobatik, Partnerakrobatik, Chinese Pole, Hula Hoop, Handstand, Contemporary Dance, Breakdance, Teeterboard, Jonglage, Moderation, Pantomime/Entertainment
-tags:
-  - Artists
 security:
   - Bearer: []
 requestBody:
@@ -83,6 +22,7 @@ requestBody:
             type: string
           email:
             type: string
+            format: email
           password:
             type: string
           disciplines:
@@ -122,7 +62,7 @@ requestBody:
             password: "securepassword"
             disciplines: ["Cyr-Wheel"]
 responses:
-  201:
+  '201':
     description: Artist erfolgreich erstellt
     content:
       application/json:
@@ -131,7 +71,7 @@ responses:
           properties:
             id:
               type: integer
-  400:
+  '400':
     description: Ungültige Eingabedaten
     content:
       application/json:
@@ -140,7 +80,7 @@ responses:
           properties:
             error:
               type: string
-  409:
+  '409':
     description: E-Mail existiert bereits
     content:
       application/json:
