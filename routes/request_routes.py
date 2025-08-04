@@ -34,109 +34,117 @@ def list_requests():
 @swag_from('../resources/swagger/requests_post.yml')
 def create_request():
     """Erstellt eine neue Buchungsanfrage und berechnet eine Preisspanne."""
-    data = request.json
-    # Team-Größe normalisieren: Zahlen oder Strings wie "solo"/"duo" akzeptieren
-    raw_team_size = data.get('team_size')
-    if isinstance(raw_team_size, str):
-        ts_lower = raw_team_size.strip().lower()
-        if ts_lower == 'solo':
-            team_size = 1
-        elif ts_lower == 'duo':
-            team_size = 2
-        elif ts_lower in ('group', 'gruppe'):
-            team_size = 3
-            # vereinfacht, da keine Preisberechnung mehr ab 3 Personen
+    try:
+        data = request.get_json(force=True)
+        current_app.logger.debug("create_request payload: %s", data)
+
+        # Team-Größe normalisieren: Zahlen oder Strings wie "solo"/"duo" akzeptieren
+        raw_team_size = data.get('team_size')
+        if isinstance(raw_team_size, str):
+            ts_lower = raw_team_size.strip().lower()
+            if ts_lower == 'solo':
+                team_size = 1
+            elif ts_lower == 'duo':
+                team_size = 2
+            elif ts_lower in ('group', 'gruppe'):
+                team_size = 3
+            else:
+                try:
+                    team_size = int(raw_team_size)
+                except ValueError:
+                    return jsonify({'error': 'Invalid team_size'}), 400
         else:
-            try:
-                team_size = int(raw_team_size)
-            except ValueError:
-                return jsonify({'error': 'Invalid team_size'}), 400
-    else:
-        team_size = raw_team_size
+            team_size = raw_team_size
 
-    disciplines = data.get('disciplines', [])
-    event_date = data['event_date']
-    artist_objs = artist_mgr.get_artists_by_discipline(disciplines, event_date)
-    req = request_mgr.create_request(
-        client_name       = data['client_name'],
-        client_email      = data['client_email'],
-        event_date        = data['event_date'],
-        event_time        = data['event_time'],
-        duration_minutes  = data['duration_minutes'],
-        event_type        = data['event_type'],
-        show_type         = data['show_type'],
-        show_discipline   = disciplines,  
-        team_size         = team_size,
-        number_of_guests  = data['number_of_guests'],
-        event_address     = data['event_address'],
-        is_indoor         = data['is_indoor'],
-        special_requests  = data.get('special_requests',''),
-        needs_light       = data.get('needs_light', False),
-        needs_sound       = data.get('needs_sound', False),
-        artists           = artist_objs,
-        distance_km       = data.get('distance_km', 0.0),
-        newsletter_opt_in = data.get('newsletter_opt_in', False)
-    )
-    # Preisspanne berechnen basierend auf ausgewählten Artists und Parametern
-    if not req.artists:
-        req.price_min = None
-        req.price_max = None
-        pmin = None
-        pmax = None
-    else:
-        fee_pct = float(current_app.config.get("AGENCY_FEE_PERCENT", 20))
-        #wenn Artisten aus verschiedenen Städten kommen
-        event_city = data.get('event_address', '').split(',')[-1].strip().lower()
-        external_artists = [
-            a for a in artist_objs
-            if a.address and event_city not in a.address.lower()
-        ]
-        travel_distance = req.distance_km if external_artists else 0.0
+        disciplines = data.get('disciplines', [])
+        event_date = data['event_date']  # will raise KeyError if missing
+        artist_objs = artist_mgr.get_artists_by_discipline(disciplines, event_date)
+        req = request_mgr.create_request(
+            client_name       = data['client_name'],
+            client_email      = data['client_email'],
+            event_date        = data['event_date'],
+            event_time        = data['event_time'],
+            duration_minutes  = data['duration_minutes'],
+            event_type        = data['event_type'],
+            show_type         = data.get('show_type'),
+            show_discipline   = disciplines,
+            team_size         = team_size,
+            number_of_guests  = data['number_of_guests'],
+            event_address     = data['event_address'],
+            is_indoor         = data.get('is_indoor', False),
+            special_requests  = data.get('special_requests', ''),
+            needs_light       = data.get('needs_light', False),
+            needs_sound       = data.get('needs_sound', False),
+            artists           = artist_objs,
+            distance_km       = data.get('distance_km', 0.0),
+            newsletter_opt_in = data.get('newsletter_opt_in', False)
+        )
 
-        if team_size == 1:
-            base_min = min(a.price_min for a in artist_objs)
-            base_max = max(a.price_max for a in artist_objs)
-        elif team_size == 2:
-            # hier vereinfacht - kummuliert die Preis- Unter- & -Obergrenze der ersten beiden passenden Artisten
-            sorted_by_min = sorted(artist_objs, key=lambda a: a.price_min)
-            sorted_by_max = sorted(artist_objs, key=lambda a: a.price_max, reverse=True)
-            base_min = sum(a.price_min for a in sorted_by_min[:2])
-            base_max = sum(a.price_max for a in sorted_by_max[:2])
+        # Preisspanne berechnen basierend auf ausgewählten Artists und Parametern
+        if not req.artists:
+            req.price_min = None
+            req.price_max = None
+            pmin = None
+            pmax = None
         else:
-            base_min = base_max = None
+            fee_pct = float(current_app.config.get("AGENCY_FEE_PERCENT", 20))
+            event_city = data.get('event_address', '').split(',')[-1].strip().lower()
+            external_artists = [
+                a for a in artist_objs
+                if a.address and event_city not in a.address.lower()
+            ]
+            travel_distance = req.distance_km if external_artists else 0.0
 
-        if base_min is not None:
-            args = {
-                'base_min': base_min,
-                'base_max': base_max,
-                'distance_km': travel_distance,
-                'fee_pct': fee_pct,
-                'newsletter': req.newsletter_opt_in,
-                'event_type': req.event_type,
-                'num_guests': req.number_of_guests,
-                'is_weekend': req.event_date.weekday() >= 5,
-                'is_indoor': req.is_indoor,
-                'needs_light': req.needs_light,
-                'needs_sound': req.needs_sound,
-                'show_discipline': req.show_discipline,
-                'team_size': team_size,
-                'duration': req.duration_minutes,
-                'event_address': req.event_address
-            }
-            pmin, pmax = calculate_price(**args)
-        else:
-            pmin = pmax = None
+            if team_size == 1:
+                base_min = min(a.price_min for a in artist_objs)
+                base_max = max(a.price_max for a in artist_objs)
+            elif team_size == 2:
+                sorted_by_min = sorted(artist_objs, key=lambda a: a.price_min)
+                sorted_by_max = sorted(artist_objs, key=lambda a: a.price_max, reverse=True)
+                base_min = sum(a.price_min for a in sorted_by_min[:2])
+                base_max = sum(a.price_max for a in sorted_by_max[:2])
+            else:
+                base_min = base_max = None
 
-        req.price_min = pmin
-        req.price_max = pmax
-    db.session.commit()
+            if base_min is not None:
+                args = {
+                    'base_min': base_min,
+                    'base_max': base_max,
+                    'distance_km': travel_distance,
+                    'fee_pct': fee_pct,
+                    'newsletter': req.newsletter_opt_in,
+                    'event_type': req.event_type,
+                    'num_guests': req.number_of_guests,
+                    'is_weekend': req.event_date.weekday() >= 5,
+                    'is_indoor': req.is_indoor,
+                    'needs_light': req.needs_light,
+                    'needs_sound': req.needs_sound,
+                    'show_discipline': req.show_discipline,
+                    'team_size': team_size,
+                    'duration': req.duration_minutes,
+                    'event_address': req.event_address
+                }
+                pmin, pmax = calculate_price(**args)
+            else:
+                pmin = pmax = None
 
-    return jsonify({
-        'request_id': req.id,
-        'price_min': pmin,
-        'price_max': pmax,
-        'num_available_artists': len(artist_objs)
-    }), 201
+            req.price_min = pmin
+            req.price_max = pmax
+        db.session.commit()
+
+        return jsonify({
+            'request_id': req.id,
+            'price_min': pmin,
+            'price_max': pmax,
+            'num_available_artists': len(artist_objs)
+        }), 201
+
+    except KeyError as ke:
+        current_app.logger.warning("Missing field in create_request: %s", ke)
+        return jsonify({'error': 'missing_field', 'details': str(ke)}), 400
+    except Exception as e:
+        current_app.logger.exception("Error in create_request")
+        return jsonify({'error': 'internal_server_error', 'details': str(e)}), 500
 
 
 @booking_bp.route('/requests/<int:req_id>/offer', methods=['PUT'])
