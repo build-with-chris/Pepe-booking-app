@@ -1,6 +1,6 @@
 tags:
   - Artists
-description: |
+description: 
   Create a new artist.
 
   Allowed Disciplines: Zauberer, Cyr-Wheel, Bodenakrobatik, Luftakrobatik, Partnerakrobatik, Chinese Pole, Hula Hoop, Handstand, Contemporary Dance, Breakdance, Teeterboard, Jonglage, Moderation, Pantomime/Entertainment
@@ -64,7 +64,7 @@ description: |
   Legt einen neuen Artist an. Erfordert Authentifizierung. Die E-Mail darf noch nicht existieren. Disziplinen müssen angegeben werden.
   Allowed Disciplines: Zauberer, Cyr-Wheel, Bodenakrobatik, Luftakrobatik, Partnerakrobatik, Chinese Pole, Hula Hoop, Handstand, Contemporary Dance, Breakdance, Teeterboard, Jonglage, Moderation, Pantomime/Entertainment
 tags:
-  - artists
+  - Artists
 security:
   - Bearer: []
 requestBody:
