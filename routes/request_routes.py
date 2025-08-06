@@ -1,3 +1,4 @@
+from datetime import datetime
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from services.calculate_price import calculate_price
@@ -202,6 +203,10 @@ def set_offer(req_id):
 
     # Speichere das neue Angebot
     req = request_mgr.set_offer(req_id, user_id, artist_gage)
+    # Speichere das konkrete Angebot und Zeitstempel
+    req.artist_gage = artist_gage
+    req.artist_offer_date = datetime.utcnow()
+    db.session.commit()
 
     # Push-Benachrichtigung an alle Artists senden
     for artist in req.artists:
