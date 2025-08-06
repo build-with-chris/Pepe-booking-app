@@ -170,7 +170,7 @@ class BookingRequestManager:
             BookingRequest.query
             .join(booking_artists, booking_artists.c.booking_id == BookingRequest.id)
             .filter(booking_artists.c.artist_id == aid)
-            .filter(BookingRequest.status.in_(["angefragt", "requested"]))
+            .filter(BookingRequest.status.in_(ALLOWED_STATUSES))
         )
         results = query.all()
         current_app.logger.debug(f"get_requests_for_artist: artist_id={aid}, found {[r.id for r in results]}")
