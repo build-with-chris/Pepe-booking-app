@@ -2,9 +2,9 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from services.calculate_price import calculate_price
 from flask import current_app
-from models import db
+from models import db, Artist
 from flasgger import swag_from
-from routes.api_routes import get_current_user
+
 from managers.booking_requests_manager import BookingRequestManager
 from managers.artist_manager import ArtistManager
 
@@ -152,11 +152,18 @@ def create_request():
 @swag_from('../resources/swagger/requests_offer_put.yml')
 def set_offer(req_id):
     """Ermöglicht einem eingeloggten Artist, ein Angebot für eine Anfrage abzugeben."""
-    user_id, user = get_current_user()
+    # Ermittle internen Artist anhand der Supabase JWT Identity
+    supabase_id = get_jwt_identity()
+    current_app.logger.debug(">>> Supabase ID aus Token: %s", supabase_id)
+    user = Artist.query.filter_by(supabase_user_id=supabase_id).first()
+    current_app.logger.debug(">>> Supabase ID aus Token: %s", supabase_id)
+    if not user:
+        return jsonify({'error':'Not allowed'}), 403
+    user_id = user.id
+
     req = request_mgr.get_request(req_id)
     # Zugriff prüfen: Nur beteiligte Artists oder Admins dürfen bieten
-    if not req or (user_id not in [a.id for a in req.artists]
-                   and not user.is_admin):
+    if not req or (user_id not in [a.id for a in req.artists] and not user.is_admin):
         return jsonify({'error':'Not allowed'}), 403
 
     data = request.json
