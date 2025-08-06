@@ -115,21 +115,22 @@ def delete_admin_offer(offer_id):
 @swag_from('../resources/swagger/dashboard_get.yml')
 def dashboard():
     """Gibt Dashboard-Daten (Verfügbarkeiten und Angebote) zurück."""
+    # Dashboard data: slots and admin offers
     slots = avail_mgr.get_all_availabilities()
-    offers = request_mgr.get_all_requests()
+    # Gather all admin offers across requests
+    booking_requests = request_mgr.get_all_requests()
+    offers_data = []
+    for br in booking_requests:
+        admin_offers = offer_mgr.get_admin_offers(br.id)
+        for ao in admin_offers:
+            offers_data.append({
+                'id': ao.id,
+                'request_id': ao.request_id,
+                'override_price': ao.override_price,
+                'notes': ao.notes,
+                'created_at': ao.created_at.isoformat()
+            })
     return jsonify({
-        'slots': slots,  
-        'offers': [
-            {
-                'id': r.id,
-                'client_name': r.client_name,
-                'client_email': r.client_email,
-                'event_date': r.event_date.isoformat(),
-                'event_time': r.event_time.isoformat() if r.event_time else None,
-                'team_size': r.team_size,
-                'status': r.status,
-                'price_offered': r.price_offered
-            }
-            for r in offers
-        ]
+        'slots': slots,
+        'offers': offers_data
     }), 200
