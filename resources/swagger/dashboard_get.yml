@@ -2,10 +2,10 @@ tags:
   - Admin
 summary: Get admin dashboard data
 description: Returns availability slots and offers for all artists; only accessible by admins.
-produces:
-  - application/json
 security:
   - Bearer: []
+produces:
+  - application/json
 responses:
   200:
     description: Dashboard data retrieved successfully

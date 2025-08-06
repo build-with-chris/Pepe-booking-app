@@ -2,6 +2,8 @@ tags:
   - AdminOffers
 description: |
   Listet alle Admin-Angebote für eine bestimmte Booking-Request.
+security:
+  - Bearer: []
 parameters:
   - name: req_id
     in: path
