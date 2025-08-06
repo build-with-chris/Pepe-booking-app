@@ -29,7 +29,16 @@ class AvailabilityManager:
     def get_all_availabilities(self):
         """Gibt alle Verfügbarkeitstage aller Artists zurück."""
         try:
-            return Availability.query.order_by(Availability.artist_id, Availability.date).all()
+            slots = Availability.query.order_by(Availability.artist_id, Availability.date).all()
+            # Serialize slots to include artist_id
+            return [
+                {
+                    'id': slot.id,
+                    'date': slot.date.isoformat(),
+                    'artist_id': slot.artist_id,
+                }
+                for slot in slots
+            ]
         except Exception as e:
             logger.exception('Fehler beim Laden aller Availabilities')
             return []

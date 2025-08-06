@@ -118,10 +118,7 @@ def dashboard():
     slots = avail_mgr.get_all_availabilities()
     offers = request_mgr.get_all_requests()
     return jsonify({
-        'slots': [
-            {'id': slot.id, 'date': slot.date.isoformat()}
-            for slot in slots
-        ],
+        'slots': slots,  
         'offers': [
             {
                 'id': r.id,
