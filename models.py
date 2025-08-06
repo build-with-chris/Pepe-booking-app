@@ -93,7 +93,9 @@ class BookingRequest(db.Model):
     price_min          = db.Column(db.Integer, nullable=True)
     price_max          = db.Column(db.Integer, nullable=True)
     price_offered      = db.Column(db.Integer, nullable=True)
-    status             = db.Column(db.String(20), default='requested')
+    artist_gage        = db.Column(db.Integer, nullable=True)
+    artist_offer_date  = db.Column(db.DateTime, nullable=True)
+    status             = db.Column(db.String(20), default='angefragt')
 
     # Beziehung: Eine Buchungsanfrage kann mehrere Artists involvieren und vice versa.
     artists          = db.relationship(

@@ -3,7 +3,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from services.calculate_price import calculate_price
 from flask import current_app
-from models import db, Artist
+from models import db, Artist, BookingRequest
 from flasgger import swag_from
 
 from managers.booking_requests_manager import BookingRequestManager
@@ -201,12 +201,13 @@ def set_offer(req_id):
         event_address  = req.event_address
     )
 
-    # Speichere das neue Angebot
-    req = request_mgr.set_offer(req_id, user_id, artist_gage)
-    # Speichere das konkrete Angebot und Zeitstempel
-    req.artist_gage = artist_gage
-    req.artist_offer_date = datetime.utcnow()
+    # Speichere das neue Angebot direkt am BookingRequest
+    booking = BookingRequest.query.get(req_id)
+    booking.artist_gage = artist_gage
+    booking.artist_offer_date = datetime.utcnow()
+    booking.status = 'angeboten'
     db.session.commit()
+    req = booking
 
     # Push-Benachrichtigung an alle Artists senden
     for artist in req.artists:
