@@ -249,6 +249,9 @@ class BookingRequestManager:
                 'status': r.status,
                 'artist_ids': [a.id for a in r.artists],
                 'recommended_price_min': rec_min,
-                'recommended_price_max': rec_max
+                'recommended_price_max': rec_max,
+                # Neu: tatsächliches Angebot und Datum
+                'artist_gage': getattr(r, 'artist_gage', None),
+                'artist_offer_date': r.artist_offer_date.isoformat() if getattr(r, 'artist_offer_date', None) else None
             })
         return result
