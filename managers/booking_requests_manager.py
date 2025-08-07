@@ -255,3 +255,19 @@ class BookingRequestManager:
                 'artist_offer_date': r.artist_offer_date.isoformat() if getattr(r, 'artist_offer_date', None) else None
             })
         return result
+    
+    def get_artist_offer(self, request_id, artist_id):
+        """Gibt das vom Artist eingereichte Angebot und Datum für eine bestimmte Anfrage zurück."""
+        # Hole die BookingRequest
+        req = self.get_request(request_id)
+        if not req:
+            return None
+        # Prüfe, ob der Artist an dieser Anfrage beteiligt ist
+        associated_ids = [a.id for a in req.artists]
+        if artist_id not in associated_ids:
+            return None
+        # Gib artist_gage und offer_date zurück
+        return {
+            'artist_gage': getattr(req, 'artist_gage', None),
+            'artist_offer_date': req.artist_offer_date.isoformat() if getattr(req, 'artist_offer_date', None) else None
+        }

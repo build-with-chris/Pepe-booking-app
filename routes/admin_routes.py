@@ -65,6 +65,17 @@ def list_admin_offers(req_id):
         'created_at': o.created_at.isoformat()
     } for o in offers])
 
+
+@admin_bp.route('/admin_offers/<int:offer_id>', methods=['GET'])
+@jwt_required()
+@swag_from('../resources/swagger/admin_admin_offers_get_one.yml')
+def get_admin_offer(offer_id):
+    """Gibt ein einzelnes Admin-Angebot anhand seiner ID zurück."""
+    offer = offer_mgr.get_admin_offer(offer_id)
+    if not offer:
+        return jsonify({'error': 'Not found'}), 404
+    return jsonify(offer_mgr.serialize(offer)), 200
+
 @admin_bp.route('/requests/<int:req_id>/admin_offers', methods=['POST'])
 @jwt_required()
 @swag_from('../resources/swagger/admin_requests_admin_offers_post.yml')

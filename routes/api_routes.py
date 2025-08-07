@@ -353,3 +353,18 @@ def list_my_booking_requests():
         request_ids = str(requests)
     logger.debug(f"list_my_booking_requests result count={len(requests)} ids={request_ids}")
     return jsonify(requests), 200
+
+
+# New endpoint: get artist offer for a request
+@api_bp.route('/requests/requests/<int:req_id>/offer', methods=['GET'])
+@jwt_required()
+def get_artist_offer(req_id):
+    """Gibt das vom eingeloggten Artist abgegebene Angebot zu einer Anfrage zurück."""
+    user_id, artist = get_current_user()
+    if not artist:
+        return jsonify({'error': 'Current user not linked to an artist'}), 403
+    # Hole Angebot
+    offer_data = request_mgr.get_artist_offer(req_id, artist.id)
+    if offer_data is None:
+        return jsonify({'error': 'Offer not found or not permitted'}), 404
+    return jsonify(offer_data), 200

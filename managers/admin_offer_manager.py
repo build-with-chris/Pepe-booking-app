@@ -50,3 +50,14 @@ class AdminOfferManager:
         self.db.session.delete(offer)
         self.db.session.commit()
         return deleted_offer
+
+    def serialize(self, offer):
+        """Serialisiert ein AdminOffer-Instanz in ein Dictionary."""
+        return {
+            'id': offer.id,
+            'request_id': offer.request_id,
+            'admin_id': offer.admin_id,
+            'override_price': offer.override_price,
+            'notes': offer.notes,
+            'created_at': offer.created_at.isoformat() if offer.created_at else None
+        }
