@@ -3,7 +3,7 @@ summary: Ersetze die Verfügbarkeiten eines Artists komplett
 description: |
   Nimmt eine Liste von ISO-Datum-Strings (YYYY-MM-DD) und synchronisiert die Verfügbarkeiten des aktuell angemeldeten Artists.\n  Es werden nur die Differenzen angewendet: neue Tage werden hinzugefügt, nicht mehr gewünschte entfernt.
 tags:
-  - availability
+  - Availability
 consumes:
   - application/json
 produces:

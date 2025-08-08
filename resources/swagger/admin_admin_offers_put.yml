@@ -1,5 +1,7 @@
 tags:
   - AdminOffers
+security:
+  - Bearer: []
 description: |
   Aktualisiert ein bestehendes Admin-Angebot.
 parameters:

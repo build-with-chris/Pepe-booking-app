@@ -1,5 +1,7 @@
 tags:
   - AdminOffers
+security:
+  - Bearer: []
 description: |
   Legt ein neues Admin-Angebot für eine Booking-Request an.
 parameters:

@@ -2,7 +2,7 @@ summary: Verfügbarkeiten eines Artists abrufen
 description: |
   Gibt alle Verfügbarkeitstage des aktuell angemeldeten Artists zurück. Optional kann über den Query-Parameter `artist_id` ein anderer Artist abgefragt werden, vorausgesetzt der aufrufende Benutzer ist entweder derselbe Artist oder hat Admin-Rechte.
 tags:
-  - availability
+  - Availability
 security:
   - Bearer: []
 parameters:

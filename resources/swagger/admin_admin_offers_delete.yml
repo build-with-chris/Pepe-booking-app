@@ -1,5 +1,7 @@
 tags:
   - AdminOffers
+security:
+  - Bearer: []
 description: |
   Löscht ein Admin-Angebot.
 parameters:

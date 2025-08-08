@@ -38,13 +38,13 @@ responses:
                 format: date
               event_time:
                 type: string
-                nullable: true
+                x-nullable: true
               team_size:
                 type: integer
               status:
                 type: string
               price_offered:
                 type: number
-                nullable: true
+                x-nullable: true
   403:
     description: "Forbidden: Only admins may access this endpoint"

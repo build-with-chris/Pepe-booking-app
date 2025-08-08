@@ -68,7 +68,6 @@ def list_admin_offers(req_id):
 
 @admin_bp.route('/admin_offers/<int:offer_id>', methods=['GET'])
 @jwt_required()
-@swag_from('../resources/swagger/admin_admin_offers_get_one.yml')
 def get_admin_offer(offer_id):
     """Gibt ein einzelnes Admin-Angebot anhand seiner ID zurück."""
     offer = offer_mgr.get_admin_offer(offer_id)

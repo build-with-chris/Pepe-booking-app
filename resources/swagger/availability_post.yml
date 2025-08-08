@@ -2,7 +2,7 @@ summary: Verfügbarkeitsdatum(e) hinzufügen
 description: |
   Fügt einen oder mehrere Verfügbarkeitstage für den aktuell angemeldeten Artist hinzu.\n  Erwartet eine Liste von Objekten mit ISO-Datum-Strings (YYYY-MM-DD).\n  Alternativ kann ein einzelnes Objekt mit einem Datum gesendet werden.\n  Bereits vorhandene Kombinationen werden ignoriert (idempotent).
 tags:
-  - availability
+  - Availability
 security:
   - Bearer: []
 parameters:

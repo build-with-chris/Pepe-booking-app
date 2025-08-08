@@ -2,7 +2,7 @@ summary: Verfügbarkeitstag löschen
 description: |
   Löscht einen bestimmten Verfügbarkeitstag des aktuell eingeloggten Artists. Nur der zugehörige Artist oder ein Admin mit Berechtigung kann diesen Slot entfernen.
 tags:
-  - availability
+  - Availability
 security:
   - Bearer: []
 parameters:
