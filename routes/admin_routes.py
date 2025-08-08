@@ -6,6 +6,8 @@ from managers.admin_offer_manager import AdminOfferManager
 from managers.availability_manager import AvailabilityManager
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from models import Artist
+import logging
+logger = logging.getLogger(__name__)
 
 """
 Admin-Modul: Enthält alle Endpunkte zum Verwalten von Buchungsanfragen,
@@ -46,6 +48,8 @@ def list_all_requests():
         'status':            r.status,
         'price_min':         r.price_min,
         'price_max':         r.price_max,
+        'recommended_price_min': r.price_min,
+        'recommended_price_max': r.price_max,
         'price_offered':     r.price_offered,
         'artist_ids': [a.id for a in r.artists]
     } for r in all_requests])
@@ -135,9 +139,11 @@ def admin_get_artist_statuses(req_id):
     if not is_admin:
         user_id, artist = get_current_user()
         is_admin = bool(artist and getattr(artist, 'is_admin', False))
+    logger.debug(f"admin_get_artist_statuses called for req_id={req_id}; is_admin={is_admin}")
     if not is_admin:
         return jsonify({'error': 'Not allowed'}), 403
     statuses = request_mgr.get_artist_statuses(req_id)
+    logger.debug(f"artist_statuses count={len(statuses)} sample={statuses[0] if statuses else None}")
     return jsonify(statuses), 200
 
 @admin_bp.route('/requests/<int:req_id>/artist_status/<int:artist_id>', methods=['PUT'])

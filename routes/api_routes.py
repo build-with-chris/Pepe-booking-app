@@ -361,10 +361,13 @@ def list_my_booking_requests():
 def get_artist_offer(req_id):
     """Gibt das vom eingeloggten Artist abgegebene Angebot zu einer Anfrage zurück."""
     user_id, artist = get_current_user()
+    logger.debug(f"get_artist_offer called by supabase_user_id={user_id} for req_id={req_id}")
     if not artist:
         return jsonify({'error': 'Current user not linked to an artist'}), 403
+    logger.debug(f"Resolved artist for offer lookup: id={artist.id} name={getattr(artist, 'name', None)}")
     # Hole Angebot
     offer_data = request_mgr.get_artist_offer(req_id, artist.id)
+    logger.debug(f"get_artist_offer result: {offer_data}")
     if offer_data is None:
         return jsonify({'error': 'Offer not found or not permitted'}), 404
     return jsonify(offer_data), 200

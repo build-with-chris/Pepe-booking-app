@@ -100,12 +100,12 @@ class BookingRequestManager:
     def set_offer(self, request_id, artist_id, price_offered):
         """Speichert ein Angebot und aktualisiert den Status bei Solo oder nach vollständigen Angeboten."""
         current_app.logger.info(f"set_offer called for request_id={request_id}, artist_id={artist_id}, price_offered={price_offered}")
-        # Angebot in Assoziationstabelle speichern
+        # Angebot in Assoziationstabelle speichern und Status auf 'angeboten' setzen
         self.db.session.execute(
             booking_artists.update()
             .where(booking_artists.c.booking_id == request_id)
             .where(booking_artists.c.artist_id == artist_id)
-            .values(requested_gage=price_offered)
+            .values(requested_gage=price_offered, status='angeboten')
         )
         # Alle abgegebenen Gagen abrufen
         rows = self.db.session.execute(
@@ -182,26 +182,27 @@ class BookingRequestManager:
         return res.rowcount
 
     def get_artist_statuses(self, request_id: int):
-        """Liefert pro Artist den Status für eine Anfrage zurück."""
+        """Liefert pro Artist den Status und die gesendete Gage für eine Anfrage zurück."""
         rows = self.db.session.execute(
             booking_artists.select()
             .with_only_columns(
                 booking_artists.c.artist_id,
-                booking_artists.c.status
+                booking_artists.c.status,
+                booking_artists.c.requested_gage
             )
             .where(booking_artists.c.booking_id == request_id)
         ).fetchall()
         return [
-            {'artist_id': r[0], 'status': r[1]} for r in rows
+            {'artist_id': r[0], 'status': r[1], 'requested_gage': r[2]} for r in rows
         ]
 
     def change_status(self, request_id, status):
         """Ändert den Status einer Buchungsanfrage, sofern der neue Status zulässig ist."""
         req = self.get_request(request_id)
-        allowed = ALLOWED_STATUSES
-        if req and status in allowed:
-            req.status = status
-            self.db.session.commit()
+        if not req or status not in ALLOWED_STATUSES:
+            return None
+        req.status = status
+        self.db.session.commit()
         return req
 
     def get_all_offers(self):
@@ -309,17 +310,27 @@ class BookingRequestManager:
         return result
     
     def get_artist_offer(self, request_id, artist_id):
-        """Gibt das vom Artist eingereichte Angebot und Datum für eine bestimmte Anfrage zurück."""
-        # Hole die BookingRequest
+        """Gibt das vom Artist eingereichte Angebot (Pivot) für eine bestimmte Anfrage zurück."""
+        # Verifizieren, dass die Anfrage existiert und der Artist zugeordnet ist
         req = self.get_request(request_id)
         if not req:
             return None
-        # Prüfe, ob der Artist an dieser Anfrage beteiligt ist
-        associated_ids = [a.id for a in req.artists]
-        if artist_id not in associated_ids:
+        if artist_id not in [a.id for a in req.artists]:
             return None
-        # Gib artist_gage und offer_date zurück
+        # Aus der Assoziationstabelle lesen (Single Source of Truth)
+        row = self.db.session.execute(
+            booking_artists.select()
+            .with_only_columns(
+                booking_artists.c.requested_gage,
+                booking_artists.c.status
+            )
+            .where(booking_artists.c.booking_id == request_id)
+            .where(booking_artists.c.artist_id == artist_id)
+        ).fetchone()
+        if not row:
+            return None
+        # Response-Form an FE anpassen
         return {
-            'artist_gage': getattr(req, 'artist_gage', None),
-            'artist_offer_date': req.artist_offer_date.isoformat() if getattr(req, 'artist_offer_date', None) else None
+            'price_offered': row[0],
+            'status': row[1]
         }
