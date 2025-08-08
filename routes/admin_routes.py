@@ -4,7 +4,7 @@ from routes.api_routes import get_current_user
 from managers.booking_requests_manager import BookingRequestManager
 from managers.admin_offer_manager import AdminOfferManager
 from managers.availability_manager import AvailabilityManager
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from models import Artist
 
 """
@@ -129,8 +129,13 @@ def delete_admin_offer(offer_id):
 @swag_from('../resources/swagger/admin_artist_status_get.yml')
 def admin_get_artist_statuses(req_id):
     """Gibt pro Artist den Status für eine Anfrage zurück (nur Admins)."""
-    user_id, artist = get_current_user()
-    if not artist or not getattr(artist, 'is_admin', False):
+    claims = get_jwt()
+    app_md = claims.get('app_metadata') or {}
+    is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
+    if not is_admin:
+        user_id, artist = get_current_user()
+        is_admin = bool(artist and getattr(artist, 'is_admin', False))
+    if not is_admin:
         return jsonify({'error': 'Not allowed'}), 403
     statuses = request_mgr.get_artist_statuses(req_id)
     return jsonify(statuses), 200
@@ -140,8 +145,13 @@ def admin_get_artist_statuses(req_id):
 @swag_from('../resources/swagger/admin_artist_status_put.yml')
 def admin_set_artist_status(req_id, artist_id):
     """Setzt den Status für genau einen Artist (nur Admins)."""
-    user_id, artist = get_current_user()
-    if not artist or not getattr(artist, 'is_admin', False):
+    claims = get_jwt()
+    app_md = claims.get('app_metadata') or {}
+    is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
+    if not is_admin:
+        user_id, artist = get_current_user()
+        is_admin = bool(artist and getattr(artist, 'is_admin', False))
+    if not is_admin:
         return jsonify({'error': 'Not allowed'}), 403
     data = request.get_json(silent=True) or {}
     new_status = data.get('status')
@@ -157,8 +167,13 @@ def admin_set_artist_status(req_id, artist_id):
 @swag_from('../resources/swagger/admin_artist_status_bulk_put.yml')
 def admin_set_artists_status_bulk(req_id):
     """Setzt den Status für alle oder eine Liste von Artists (nur Admins)."""
-    user_id, artist = get_current_user()
-    if not artist or not getattr(artist, 'is_admin', False):
+    claims = get_jwt()
+    app_md = claims.get('app_metadata') or {}
+    is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
+    if not is_admin:
+        user_id, artist = get_current_user()
+        is_admin = bool(artist and getattr(artist, 'is_admin', False))
+    if not is_admin:
         return jsonify({'error': 'Not allowed'}), 403
     data = request.get_json(silent=True) or {}
     new_status = data.get('status')
