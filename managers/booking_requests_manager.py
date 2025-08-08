@@ -265,6 +265,23 @@ class BookingRequestManager:
                 event_address=r.event_address
             )
             current_app.logger.info(f"Calculated recommendation for request {r.id}: min={rec_min}, max={rec_max}")
+
+            # Pivot-Daten (pro Artist) laden: Status & gesendete Gage
+            pivot_row = self.db.session.execute(
+                booking_artists.select()
+                .with_only_columns(
+                    booking_artists.c.status,
+                    booking_artists.c.requested_gage
+                )
+                .where(booking_artists.c.booking_id == r.id)
+                .where(booking_artists.c.artist_id == aid)
+            ).fetchone()
+            artist_status = pivot_row[0] if pivot_row else None
+            requested_gage = pivot_row[1] if pivot_row else None
+            current_app.logger.debug(
+                f"artist pivot for request {r.id} & artist {aid}: status={artist_status}, requested_gage={requested_gage}"
+            )
+
             result.append({
                 'id': r.id,
                 'client_name': r.client_name,
@@ -282,12 +299,13 @@ class BookingRequestManager:
                 'special_requests': r.special_requests,
                 'needs_light': r.needs_light,
                 'needs_sound': r.needs_sound,
-                'status': r.status,
+                'status': artist_status or r.status,
+                'artist_status': artist_status,
                 'artist_ids': [a.id for a in r.artists],
                 'recommended_price_min': rec_min,
                 'recommended_price_max': rec_max,
                 # Neu: tatsächliches Angebot und Datum
-                'artist_gage': getattr(r, 'artist_gage', None),
+                'artist_gage': requested_gage,
                 'artist_offer_date': r.artist_offer_date.isoformat() if getattr(r, 'artist_offer_date', None) else None
             })
         return result
