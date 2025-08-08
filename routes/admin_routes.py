@@ -5,6 +5,7 @@ from managers.booking_requests_manager import BookingRequestManager
 from managers.admin_offer_manager import AdminOfferManager
 from managers.availability_manager import AvailabilityManager
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from models import Artist
 
 """
 Admin-Modul: Enthält alle Endpunkte zum Verwalten von Buchungsanfragen,
@@ -119,6 +120,56 @@ def delete_admin_offer(offer_id):
     if not deleted:
         return jsonify({'error': 'Not found'}), 404
     return jsonify({'deleted': deleted.id})
+
+# -------------------------------------------------------------
+# Per-Artist-Status einer Anfrage (Admin) 08.08.25
+# -------------------------------------------------------------
+@admin_bp.route('/requests/<int:req_id>/artist_status', methods=['GET'])
+@jwt_required()
+@swag_from('../resources/swagger/admin_artist_status_get.yml')
+def admin_get_artist_statuses(req_id):
+    """Gibt pro Artist den Status für eine Anfrage zurück (nur Admins)."""
+    user_id, artist = get_current_user()
+    if not artist or not getattr(artist, 'is_admin', False):
+        return jsonify({'error': 'Not allowed'}), 403
+    statuses = request_mgr.get_artist_statuses(req_id)
+    return jsonify(statuses), 200
+
+@admin_bp.route('/requests/<int:req_id>/artist_status/<int:artist_id>', methods=['PUT'])
+@jwt_required()
+@swag_from('../resources/swagger/admin_artist_status_put.yml')
+def admin_set_artist_status(req_id, artist_id):
+    """Setzt den Status für genau einen Artist (nur Admins)."""
+    user_id, artist = get_current_user()
+    if not artist or not getattr(artist, 'is_admin', False):
+        return jsonify({'error': 'Not allowed'}), 403
+    data = request.get_json(silent=True) or {}
+    new_status = data.get('status')
+    if not new_status:
+        return jsonify({'error': 'status is required'}), 400
+    ok = request_mgr.set_artist_status(req_id, artist_id, new_status)
+    if not ok:
+        return jsonify({'error': 'Invalid request/artist/status'}), 400
+    return jsonify({'artist_id': artist_id, 'status': new_status}), 200
+
+@admin_bp.route('/requests/<int:req_id>/artist_status', methods=['PUT'])
+@jwt_required()
+@swag_from('../resources/swagger/admin_artist_status_bulk_put.yml')
+def admin_set_artists_status_bulk(req_id):
+    """Setzt den Status für alle oder eine Liste von Artists (nur Admins)."""
+    user_id, artist = get_current_user()
+    if not artist or not getattr(artist, 'is_admin', False):
+        return jsonify({'error': 'Not allowed'}), 403
+    data = request.get_json(silent=True) or {}
+    new_status = data.get('status')
+    artist_ids = data.get('artist_ids')  # optional Liste von Artist-IDs
+    if not new_status:
+        return jsonify({'error': 'status is required'}), 400
+    if artist_ids and isinstance(artist_ids, list):
+        updated = request_mgr.set_artists_status(req_id, artist_ids, new_status)
+    else:
+        updated = request_mgr.set_all_artists_status(req_id, new_status)
+    return jsonify({'updated': updated, 'status': new_status}), 200
 
 @admin_bp.route('/dashboard')
 @jwt_required()

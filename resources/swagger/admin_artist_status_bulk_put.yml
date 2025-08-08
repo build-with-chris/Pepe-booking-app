@@ -1,0 +1,45 @@
+tags:
+  - AdminArtistStatus
+summary: Setzt den Status für alle oder eine Liste von Artists in einer Anfrage
+description: Ohne Angabe von artist_ids wird der Status für **alle** Artists der Anfrage gesetzt.
+security:
+  - Bearer: []
+parameters:
+  - in: path
+    name: req_id
+    type: integer
+    required: true
+    description: ID der Booking-Request
+  - in: body
+    name: body
+    required: true
+    schema:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [angefragt, angeboten, akzeptiert, abgelehnt, storniert]
+        artist_ids:
+          type: array
+          items:
+            type: integer
+          description: Optionale Liste von Artist-IDs. Wenn nicht vorhanden, wird für alle gesetzt.
+consumes:
+  - application/json
+responses:
+  200:
+    description: Anzahl aktualisierter Artists und neuer Status
+    schema:
+      type: object
+      properties:
+        updated:
+          type: integer
+        status:
+          type: string
+          enum: [angefragt, angeboten, akzeptiert, abgelehnt, storniert]
+  400:
+    description: Ungültige Nutzlast
+  403:
+    description: Nicht erlaubt
+

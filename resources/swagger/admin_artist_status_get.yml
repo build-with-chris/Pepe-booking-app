@@ -1,0 +1,30 @@
+tags:
+  - AdminArtistStatus
+summary: Listet pro Artist den Status zu einer Anfrage
+description: Gibt für die angegebene Booking-Request den Status jedes verknüpften Artists zurück.
+security:
+  - Bearer: []
+parameters:
+  - in: path
+    name: req_id
+    type: integer
+    required: true
+    description: ID der Booking-Request
+responses:
+  200:
+    description: Liste der Artist-Status
+    schema:
+      type: array
+      items:
+        type: object
+        properties:
+          artist_id:
+            type: integer
+          status:
+            type: string
+            enum: [angefragt, angeboten, akzeptiert, abgelehnt, storniert]
+  403:
+    description: Nicht erlaubt
+  404:
+    description: Anfrage nicht gefunden
+
