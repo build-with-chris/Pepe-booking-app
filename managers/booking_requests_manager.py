@@ -143,6 +143,58 @@ class BookingRequestManager:
 
         return req
 
+    def set_artist_status(self, request_id: int, artist_id: int, status: str) -> bool:
+        """Setzt den Status für genau EINEN Artist innerhalb einer Anfrage."""
+        if status not in ALLOWED_STATUSES:
+            return False
+        res = self.db.session.execute(
+            booking_artists.update()
+            .where(booking_artists.c.booking_id == request_id)
+            .where(booking_artists.c.artist_id == artist_id)
+            .values(status=status)
+        )
+        self.db.session.commit()
+        return res.rowcount > 0
+
+    def set_artists_status(self, request_id: int, artist_ids: list[int], status: str) -> int:
+        """Setzt den Status für eine Menge von Artists; gibt Anzahl aktualisierter Zeilen zurück."""
+        if status not in ALLOWED_STATUSES or not artist_ids:
+            return 0
+        res = self.db.session.execute(
+            booking_artists.update()
+            .where(booking_artists.c.booking_id == request_id)
+            .where(booking_artists.c.artist_id.in_(artist_ids))
+            .values(status=status)
+        )
+        self.db.session.commit()
+        return res.rowcount
+
+    def set_all_artists_status(self, request_id: int, status: str) -> int:
+        """Setzt den Status für ALLE Artists einer Anfrage; gibt Anzahl aktualisierter Zeilen zurück."""
+        if status not in ALLOWED_STATUSES:
+            return 0
+        res = self.db.session.execute(
+            booking_artists.update()
+            .where(booking_artists.c.booking_id == request_id)
+            .values(status=status)
+        )
+        self.db.session.commit()
+        return res.rowcount
+
+    def get_artist_statuses(self, request_id: int):
+        """Liefert pro Artist den Status für eine Anfrage zurück."""
+        rows = self.db.session.execute(
+            booking_artists.select()
+            .with_only_columns(
+                booking_artists.c.artist_id,
+                booking_artists.c.status
+            )
+            .where(booking_artists.c.booking_id == request_id)
+        ).fetchall()
+        return [
+            {'artist_id': r[0], 'status': r[1]} for r in rows
+        ]
+
     def change_status(self, request_id, status):
         """Ändert den Status einer Buchungsanfrage, sofern der neue Status zulässig ist."""
         req = self.get_request(request_id)
