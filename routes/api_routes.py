@@ -355,19 +355,37 @@ def list_my_booking_requests():
     return jsonify(requests), 200
 
 
-# New endpoint: get artist offer for a request
-@api_bp.route('/requests/requests/<int:req_id>/offer', methods=['GET'])
+
+# Combined GET/PUT endpoint for artist offer
+@api_bp.route('/requests/requests/<int:req_id>/offer', methods=['GET', 'PUT'])
 @jwt_required()
-def get_artist_offer(req_id):
-    """Gibt das vom eingeloggten Artist abgegebene Angebot zu einer Anfrage zurück."""
+def artist_offer(req_id):
+    """GET: liefert das eigene Angebot; PUT: speichert/aktualisiert die eigene Gage und setzt Status auf 'angeboten'."""
     user_id, artist = get_current_user()
-    logger.debug(f"get_artist_offer called by supabase_user_id={user_id} for req_id={req_id}")
+    logger.debug(f"artist_offer called by supabase_user_id={user_id} for req_id={req_id} method={request.method}")
     if not artist:
         return jsonify({'error': 'Current user not linked to an artist'}), 403
+
+    if request.method == 'PUT':
+        try:
+            payload = request.get_json(silent=True) or {}
+            price_offered = payload.get('price_offered')
+            if price_offered is None:
+                return jsonify({'error': 'price_offered is required'}), 400
+            # persist in pivot and set status='angeboten'
+            request_mgr.set_offer(req_id, artist.id, price_offered)
+            # Nach dem Speichern erneut aus Pivot lesen
+            offer_data = request_mgr.get_artist_offer(req_id, artist.id)
+            logger.debug(f"artist_offer PUT stored; pivot now: {offer_data}")
+            return jsonify(offer_data or {'price_offered': price_offered, 'status': 'angeboten'}), 200
+        except Exception as e:
+            logger.exception('Failed to set artist offer')
+            return jsonify({'error': 'Failed to set offer', 'details': str(e)}), 500
+
+    # GET-Fall
     logger.debug(f"Resolved artist for offer lookup: id={artist.id} name={getattr(artist, 'name', None)}")
-    # Hole Angebot
     offer_data = request_mgr.get_artist_offer(req_id, artist.id)
-    logger.debug(f"get_artist_offer result: {offer_data}")
+    logger.debug(f"artist_offer GET result: {offer_data}")
     if offer_data is None:
         return jsonify({'error': 'Offer not found or not permitted'}), 404
     return jsonify(offer_data), 200

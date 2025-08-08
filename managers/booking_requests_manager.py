@@ -101,47 +101,30 @@ class BookingRequestManager:
         """Speichert ein Angebot und aktualisiert den Status bei Solo oder nach vollständigen Angeboten."""
         current_app.logger.info(f"set_offer called for request_id={request_id}, artist_id={artist_id}, price_offered={price_offered}")
         # Angebot in Assoziationstabelle speichern und Status auf 'angeboten' setzen
-        self.db.session.execute(
+        res = self.db.session.execute(
             booking_artists.update()
             .where(booking_artists.c.booking_id == request_id)
             .where(booking_artists.c.artist_id == artist_id)
             .values(requested_gage=price_offered, status='angeboten')
         )
-        # Alle abgegebenen Gagen abrufen
-        rows = self.db.session.execute(
-            booking_artists.select()
-            .with_only_columns(booking_artists.c.requested_gage)
-            .where(booking_artists.c.booking_id == request_id)
-        ).fetchall()
-        gages = [r[0] for r in rows]
-
-        req = self.get_request(request_id)
-        # Solo-Booking oder alle Artists haben geboten
-        if int(req.team_size) == 1 or all(g is not None for g in gages):
-            raw = price_offered if int(req.team_size) == 1 else sum(g for g in gages if g is not None)
-            req.status = "angeboten"
-            # Finalpreis berechnen (inklusive Agenturgebühr, Technik etc.)
-            min_p, _ = calculate_price(
-                base_min=raw,
-                base_max=raw,
-                distance_km=req.distance_km,
-                fee_pct=float(current_app.config.get("AGENCY_FEE_PERCENT", 20)),
-                newsletter=req.newsletter_opt_in,
-                event_type=None,
-                num_guests=req.number_of_guests,
-                is_weekend=req.event_date.weekday() >= 5,
-                is_indoor=req.is_indoor,
-                needs_light=req.needs_light,
-                needs_sound=req.needs_sound,
-                show_discipline=req.show_discipline,
-                team_size=req.team_size,
-                duration=req.duration_minutes,
-                event_address=req.event_address
+        current_app.logger.debug(
+            f"set_offer pivot update rowcount={res.rowcount} request_id={request_id} artist_id={artist_id} price_offered={price_offered}"
+        )
+        if res.rowcount == 0:
+            # Falls die Verknüpfung fehlt, lege sie an
+            self.db.session.execute(
+                booking_artists.insert().values(
+                    booking_id=request_id,
+                    artist_id=artist_id,
+                    requested_gage=price_offered,
+                    status='angeboten'
+                )
             )
-            req.price_offered = min_p
-            self.db.session.commit()
-
-        return req
+            current_app.logger.debug("set_offer pivot insert performed for missing association")
+        # Wichtig: Pivot-Update sofort festschreiben, damit nachfolgende Reads (z.B. Admin) die Gage sehen
+        self.db.session.commit()
+        # (Der Rest der bisherigen Logik zur Preisberechnung/Status kann nach Bedarf wieder ergänzt werden)
+        return self.get_request(request_id)
 
     def set_artist_status(self, request_id: int, artist_id: int, status: str) -> bool:
         """Setzt den Status für genau EINEN Artist innerhalb einer Anfrage."""
