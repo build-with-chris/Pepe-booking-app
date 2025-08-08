@@ -32,7 +32,7 @@ class Discipline(db.Model):
 
 
 class Artist(UserMixin, db.Model):
-    """Artist-Profil mit persönlichen Daten, Login-Info und Beziehungen zu Disziplinen und Buchungsanfragen."""
+    """Artist-Profil mit persönlichen Daten, Login-Info, öffentlichem Profil (Bild & Bio) und Beziehungen zu Disziplinen und Buchungsanfragen."""
     __tablename__ = 'artists'
     id             = db.Column(db.Integer, primary_key=True)
     name           = db.Column(db.String(100), nullable=False)
@@ -45,6 +45,10 @@ class Artist(UserMixin, db.Model):
     price_min      = db.Column(db.Integer, default=1500)
     price_max      = db.Column(db.Integer, default=1900)
     supabase_user_id = db.Column(db.String(255), unique=True, nullable=True)
+
+    # Öffentliches Profil
+    profile_image_url = db.Column(db.String(512), nullable=True)
+    bio               = db.Column(db.Text, nullable=True)
 
     # Beziehung: Ein Artist kann mehrere Disziplinen haben, und jede Disziplin kann mehreren Artists zugeordnet sein.
     disciplines    = db.relationship(

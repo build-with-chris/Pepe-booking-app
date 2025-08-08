@@ -52,6 +52,8 @@ def list_artists():
         'email': a.email,
         'phone_number': a.phone_number,
         'disciplines': [d.name for d in a.disciplines],
+        'profile_image_url': getattr(a, 'profile_image_url', None),
+        'bio': getattr(a, 'bio', None),
     } for a in artists])
 
 
@@ -89,6 +91,59 @@ def create_artist():
     except Exception as e:
         logger.exception('Failed to create artist')
         return jsonify({'error': 'Failed to create artist', 'details': str(e)}), 500
+
+
+# Own artist profile: read
+@api_bp.route('/artists/me', methods=['GET'])
+@jwt_required()
+def get_my_artist():
+    """Liefert das eigene Artist-Profil (inkl. Bild & Bio) der eingeloggten Person."""
+    user_id, artist = get_current_user()
+    if not artist:
+        return jsonify({'error': 'Current user not linked to an artist'}), 403
+    return jsonify({
+        'id': artist.id,
+        'name': artist.name,
+        'email': artist.email,
+        'phone_number': artist.phone_number,
+        'disciplines': [d.name for d in artist.disciplines],
+        'profile_image_url': getattr(artist, 'profile_image_url', None),
+        'bio': getattr(artist, 'bio', None),
+    }), 200
+
+
+# Own artist profile: update (public profile fields)
+@api_bp.route('/artists/me/profile', methods=['PUT', 'PATCH'])
+@jwt_required()
+def update_my_profile():
+    """Aktualisiert das öffentliche Profil (Profilbild-URL & Bio) des eingeloggten Artists."""
+    user_id, artist = get_current_user()
+    if not artist:
+        return jsonify({'error': 'Current user not linked to an artist'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    img_url = payload.get('profile_image_url')
+    bio = payload.get('bio')
+
+    if img_url is None and bio is None:
+        return jsonify({'error': 'Nothing to update (profile_image_url or bio required)'}), 400
+
+    try:
+        if img_url is not None:
+            # leere Strings als Null speichern, sonst gekürzt
+            artist.profile_image_url = (img_url or None)
+        if bio is not None:
+            # einfache Begrenzung & Trim (Sanitizing in der FE/BE-Pipeline empfohlen)
+            artist.bio = (str(bio).strip()[:1000] if bio is not None else None)
+        db.session.commit()
+        return jsonify({
+            'id': artist.id,
+            'profile_image_url': getattr(artist, 'profile_image_url', None),
+            'bio': getattr(artist, 'bio', None),
+        }), 200
+    except Exception as e:
+        logger.exception('Failed to update own profile')
+        return jsonify({'error': 'Failed to update profile', 'details': str(e)}), 500
 
 
 @api_bp.route('/artists/email/<string:email>', methods=['GET'])
