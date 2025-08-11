@@ -11,7 +11,7 @@ def calculate_price(base_min, base_max,
     Berechnet eine Preisspanne (Min, Max) durch Anwendung folgender Schritte in dieser Reihenfolge:
 
     1. Event-Typ-Multiplikator (z. B. Firmenfeier ×1.3, Privat ×0.7, …)
-    2. Gästezahl-Multiplikator (bis 50 ×0.8, 51–200 ×1.0, >200 ×1.2)
+    2. Gästezahl-Multiplikator (≤200 ×1.0, 201–500 ×1.2, >500 ×1.35)
     3. Wochenend- oder Wochentag-Modifikator
     4. Newsletter-Rabatt
     5. Indoor- vs. Outdoor-Faktor
@@ -42,12 +42,14 @@ def calculate_price(base_min, base_max,
         # Artist hat festen Gagen-Wert vorgegeben, also nicht reduzieren
         g_mult = 1.0
     else:
-        if num_guests <= 50:
-            g_mult = 0.8
-        elif num_guests <= 200:
+        # Frontend liefert nun Buckets: Unter 200 (~199), 200–500 (~350), Über 500 (~501)
+        # Wir mappen auf drei Stufen: ≤200, 201–500, >500
+        if num_guests <= 200:
             g_mult = 1.0
-        else:
+        elif num_guests <= 500:
             g_mult = 1.2
+        else:
+            g_mult = 1.35
 
     min_p *= g_mult
     max_p *= g_mult
