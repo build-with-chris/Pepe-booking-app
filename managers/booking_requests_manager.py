@@ -2,6 +2,7 @@ from models import db, BookingRequest, booking_artists, Artist
 from services.calculate_price import calculate_price
 from flask import current_app
 from datetime import date, time, timedelta
+from typing import Optional, List
 
 # Zulässige Statuswerte für Buchungsanfragen
 ALLOWED_STATUSES = ["angefragt", "angeboten", "akzeptiert", "abgelehnt", "storniert"]
@@ -126,40 +127,49 @@ class BookingRequestManager:
         # (Der Rest der bisherigen Logik zur Preisberechnung/Status kann nach Bedarf wieder ergänzt werden)
         return self.get_request(request_id)
 
-    def set_artist_status(self, request_id: int, artist_id: int, status: str) -> bool:
+    def set_artist_status(self, request_id: int, artist_id: int, status: str, comment: Optional[str] = None) -> bool:
         """Setzt den Status für genau EINEN Artist innerhalb einer Anfrage."""
         if status not in ALLOWED_STATUSES:
             return False
+        update_values = {'status': status}
+        if comment is not None:
+            update_values['comment'] = comment
         res = self.db.session.execute(
             booking_artists.update()
             .where(booking_artists.c.booking_id == request_id)
             .where(booking_artists.c.artist_id == artist_id)
-            .values(status=status)
+            .values(**update_values)
         )
         self.db.session.commit()
         return res.rowcount > 0
 
-    def set_artists_status(self, request_id: int, artist_ids: list[int], status: str) -> int:
+    def set_artists_status(self, request_id: int, artist_ids: List[int], status: str, comment: Optional[str] = None) -> int:
         """Setzt den Status für eine Menge von Artists; gibt Anzahl aktualisierter Zeilen zurück."""
         if status not in ALLOWED_STATUSES or not artist_ids:
             return 0
+        update_values = {'status': status}
+        if comment is not None:
+            update_values['comment'] = comment
         res = self.db.session.execute(
             booking_artists.update()
             .where(booking_artists.c.booking_id == request_id)
             .where(booking_artists.c.artist_id.in_(artist_ids))
-            .values(status=status)
+            .values(**update_values)
         )
         self.db.session.commit()
         return res.rowcount
 
-    def set_all_artists_status(self, request_id: int, status: str) -> int:
+    def set_all_artists_status(self, request_id: int, status: str, comment: Optional[str] = None) -> int:
         """Setzt den Status für ALLE Artists einer Anfrage; gibt Anzahl aktualisierter Zeilen zurück."""
         if status not in ALLOWED_STATUSES:
             return 0
+        update_values = {'status': status}
+        if comment is not None:
+            update_values['comment'] = comment
         res = self.db.session.execute(
             booking_artists.update()
             .where(booking_artists.c.booking_id == request_id)
-            .values(status=status)
+            .values(**update_values)
         )
         self.db.session.commit()
         return res.rowcount
@@ -171,12 +181,13 @@ class BookingRequestManager:
             .with_only_columns(
                 booking_artists.c.artist_id,
                 booking_artists.c.status,
-                booking_artists.c.requested_gage
+                booking_artists.c.requested_gage,
+                booking_artists.c.comment
             )
             .where(booking_artists.c.booking_id == request_id)
         ).fetchall()
         return [
-            {'artist_id': r[0], 'status': r[1], 'requested_gage': r[2]} for r in rows
+            {'artist_id': r[0], 'status': r[1], 'requested_gage': r[2], 'comment': r[3]} for r in rows
         ]
 
     def change_status(self, request_id, status):
@@ -271,15 +282,17 @@ class BookingRequestManager:
                 booking_artists.select()
                 .with_only_columns(
                     booking_artists.c.status,
-                    booking_artists.c.requested_gage
+                    booking_artists.c.requested_gage,
+                    booking_artists.c.comment
                 )
                 .where(booking_artists.c.booking_id == r.id)
                 .where(booking_artists.c.artist_id == aid)
             ).fetchone()
             artist_status = pivot_row[0] if pivot_row else None
             requested_gage = pivot_row[1] if pivot_row else None
+            artist_comment = pivot_row[2] if pivot_row else None
             current_app.logger.debug(
-                f"artist pivot for request {r.id} & artist {aid}: status={artist_status}, requested_gage={requested_gage}"
+                f"artist pivot for request {r.id} & artist {aid}: status={artist_status}, requested_gage={requested_gage}, comment={artist_comment}"
             )
 
             result.append({
@@ -306,6 +319,7 @@ class BookingRequestManager:
                 'recommended_price_max': rec_max,
                 # Neu: tatsächliches Angebot und Datum
                 'artist_gage': requested_gage,
+                'artist_comment': artist_comment,
                 'artist_offer_date': r.artist_offer_date.isoformat() if getattr(r, 'artist_offer_date', None) else None
             })
         return result
@@ -323,7 +337,8 @@ class BookingRequestManager:
             booking_artists.select()
             .with_only_columns(
                 booking_artists.c.requested_gage,
-                booking_artists.c.status
+                booking_artists.c.status,
+                booking_artists.c.comment
             )
             .where(booking_artists.c.booking_id == request_id)
             .where(booking_artists.c.artist_id == artist_id)
@@ -333,5 +348,6 @@ class BookingRequestManager:
         # Response-Form an FE anpassen
         return {
             'price_offered': row[0],
-            'status': row[1]
+            'status': row[1],
+            'comment': row[2]
         }

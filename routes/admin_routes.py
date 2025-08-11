@@ -161,12 +161,13 @@ def admin_set_artist_status(req_id, artist_id):
         return jsonify({'error': 'Not allowed'}), 403
     data = request.get_json(silent=True) or {}
     new_status = data.get('status')
+    comment = data.get('comment') or data.get('remark')
     if not new_status:
         return jsonify({'error': 'status is required'}), 400
-    ok = request_mgr.set_artist_status(req_id, artist_id, new_status)
+    ok = request_mgr.set_artist_status(req_id, artist_id, new_status, comment)
     if not ok:
         return jsonify({'error': 'Invalid request/artist/status'}), 400
-    return jsonify({'artist_id': artist_id, 'status': new_status}), 200
+    return jsonify({'artist_id': artist_id, 'status': new_status, 'comment': comment}), 200
 
 @admin_bp.route('/requests/<int:req_id>/artist_status', methods=['PUT'])
 @jwt_required()
@@ -183,14 +184,15 @@ def admin_set_artists_status_bulk(req_id):
         return jsonify({'error': 'Not allowed'}), 403
     data = request.get_json(silent=True) or {}
     new_status = data.get('status')
+    comment = data.get('comment') or data.get('remark')
     artist_ids = data.get('artist_ids')  # optional Liste von Artist-IDs
     if not new_status:
         return jsonify({'error': 'status is required'}), 400
     if artist_ids and isinstance(artist_ids, list):
-        updated = request_mgr.set_artists_status(req_id, artist_ids, new_status)
+        updated = request_mgr.set_artists_status(req_id, artist_ids, new_status, comment)
     else:
-        updated = request_mgr.set_all_artists_status(req_id, new_status)
-    return jsonify({'updated': updated, 'status': new_status}), 200
+        updated = request_mgr.set_all_artists_status(req_id, new_status, comment)
+    return jsonify({'updated': updated, 'status': new_status, 'comment': comment}), 200
 
 @admin_bp.route('/dashboard')
 @jwt_required()
