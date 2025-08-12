@@ -50,6 +50,9 @@ class Artist(UserMixin, db.Model):
     # Öffentliches Profil
     profile_image_url = db.Column(db.String(512), nullable=True)
     bio               = db.Column(db.Text, nullable=True)
+    instagram = db.Column(db.String(255), nullable=True)
+    gallery_urls = db.Column(db.JSON, nullable=True, default=list)
+
 
     # Beziehung: Ein Artist kann mehrere Disziplinen haben, und jede Disziplin kann mehreren Artists zugeordnet sein.
     disciplines    = db.relationship(

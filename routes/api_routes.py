@@ -57,6 +57,8 @@ def list_artists():
         'price_max': getattr(a, 'price_max', None),
         'profile_image_url': getattr(a, 'profile_image_url', None),
         'bio': getattr(a, 'bio', None),
+        'instagram': getattr(a, 'instagram', None),              
+        'gallery_urls': getattr(a, 'gallery_urls', []) or []
     } for a in artists])
 
 
@@ -115,14 +117,15 @@ def get_my_artist():
         'price_max': getattr(artist, 'price_max', None),
         'profile_image_url': getattr(artist, 'profile_image_url', None),
         'bio': getattr(artist, 'bio', None),
+        'instagram': getattr(artist, 'instagram', None),
+        'gallery_urls': getattr(artist, 'gallery_urls', []) or []
     }), 200
 
 
-# Own artist profile: update (public profile fields)
 @api_bp.route('/artists/me/profile', methods=['PUT', 'PATCH'])
 @jwt_required()
 def update_my_profile():
-    """Aktualisiert das öffentliche Profil (Profilbild-URL & Bio) des eingeloggten Artists."""
+    """Aktualisiert das öffentliche Profil (Profilbild-URL, Bio, Instagram & Galerie-URLs) des eingeloggten Artists."""
     user_id, artist = get_current_user()
     if not artist:
         return jsonify({'error': 'Current user not linked to an artist'}), 403
@@ -130,22 +133,38 @@ def update_my_profile():
     payload = request.get_json(silent=True) or {}
     img_url = payload.get('profile_image_url')
     bio = payload.get('bio')
+    instagram = payload.get('instagram')
+    gallery_urls = payload.get('gallery_urls')
 
-    if img_url is None and bio is None:
-        return jsonify({'error': 'Nothing to update (profile_image_url or bio required)'}), 400
+    if all(v is None for v in (img_url, bio, instagram, gallery_urls)):
+        return jsonify({'error': 'Nothing to update (one of profile_image_url, bio, instagram, gallery_urls required)'}), 400
+
+    # validate gallery_urls if present
+    if gallery_urls is not None:
+        if not isinstance(gallery_urls, list):
+            return jsonify({'error': 'gallery_urls must be a list of URLs'}), 400
+        # nur Strings, max. 3 Elemente
+        gallery_urls = [str(u).strip() for u in gallery_urls if isinstance(u, (str, bytes))]
+        if len(gallery_urls) > 3:
+            return jsonify({'error': 'gallery_urls may contain at most 3 items'}), 400
 
     try:
         if img_url is not None:
-            # leere Strings als Null speichern, sonst gekürzt
             artist.profile_image_url = (img_url or None)
         if bio is not None:
-            # einfache Begrenzung & Trim (Sanitizing in der FE/BE-Pipeline empfohlen)
             artist.bio = (str(bio).strip()[:1000] if bio is not None else None)
+        if instagram is not None:
+            artist.instagram = (instagram.strip() or None)
+        if gallery_urls is not None:
+            artist.gallery_urls = gallery_urls
+
         db.session.commit()
         return jsonify({
             'id': artist.id,
             'profile_image_url': getattr(artist, 'profile_image_url', None),
             'bio': getattr(artist, 'bio', None),
+            'instagram': getattr(artist, 'instagram', None),
+            'gallery_urls': getattr(artist, 'gallery_urls', []) or [],
         }), 200
     except Exception as e:
         logger.exception('Failed to update own profile')
@@ -211,6 +230,18 @@ def update_artist(artist_id):
             artist.price_min = data.get('price_min')
         if 'price_max' in data:
             artist.price_max = data.get('price_max')
+        if 'instagram' in data:
+            val = data.get('instagram')
+            artist.instagram = (val.strip() if isinstance(val, str) and val.strip() else None)
+        if 'gallery_urls' in data:
+            val = data.get('gallery_urls')
+            if val is not None:
+                if not isinstance(val, list):
+                    return jsonify({'error': 'gallery_urls must be a list of URLs'}), 400
+                urls = [str(u).strip() for u in val if isinstance(u, (str, bytes))]
+                if len(urls) > 3:
+                    return jsonify({'error': 'gallery_urls may contain at most 3 items'}), 400
+                artist.gallery_urls = urls
         if 'disciplines' in data:
             def get_or_create_discipline(name):
                 disc = Discipline.query.filter_by(name=name).first()
