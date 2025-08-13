@@ -1,31 +1,41 @@
 import pytest
 from sqlalchemy.pool import NullPool
 from app import app as flask_app
-from models import db as _db
+from models import db, Artist
 from sqlalchemy.orm import sessionmaker, scoped_session
 from managers.artist_manager import ArtistManager
 from managers.booking_requests_manager import BookingRequestManager
-from flask import url_for
 from config import TestConfig
+from flask_jwt_extended import create_access_token
+
 
 
 
 @pytest.fixture(scope='session')
 def app():
-    """Verwendet eine frische In-Memory-Datenbank für Tests (NullPool verhindert Locks)."""
     flask_app.config['TESTING'] = True
     flask_app.config.from_object(TestConfig)
     flask_app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'poolclass': NullPool,
         'connect_args': {'check_same_thread': False}
     }
-    # Configure URL building for tests
     flask_app.config['SERVER_NAME'] = 'localhost'
     flask_app.config['PREFERRED_URL_SCHEME'] = 'http'
+
     with flask_app.app_context():
-        _db.create_all()
+        # Eine Connection für die ganze Testsuite
+        conn = db.engine.connect()
+        # Tabellen mit GENAU DIESER Connection anlegen
+        db.create_all(bind=conn)
+
+        # Connection für spätere Fixtures verfügbar machen
+        flask_app.config['TEST_DB_CONN'] = conn
+
         yield flask_app
-        _db.drop_all()
+
+        # Aufräumen am Ende der Session
+        db.drop_all(bind=conn)
+        conn.close()
 
 @pytest.fixture
 def client(app):
@@ -54,6 +64,9 @@ def auth_headers(client, artist_manager):
     token = resp.get_json()['access_token']
     return {'Authorization': f'Bearer {token}'}
 
+def _bearer(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}"}
+
 
 @pytest.fixture
 def admin_auth_headers(client, artist_manager):
@@ -69,36 +82,62 @@ def admin_auth_headers(client, artist_manager):
         is_admin=True
     )
     # Log in to get token
-    resp = client.post(
-        url_for('auth.login'),
-        json={'email': 'adminuser@test.de', 'password': 'adminpass'}
-    )
+    resp = client.post('/auth/login', json={'email': 'adminuser@test.de', 'password': 'adminpass'})
+    
     token = resp.get_json()['access_token']
     return {'Authorization': f'Bearer {token}'}
 
-@pytest.fixture
-def db(app):
-    """Return SQLAlchemy db."""
-    return _db
+
+@pytest.fixture()
+def user_headers(app):
+    """JWT-Header für normalen User (ohne Adminrechte)."""
+    with app.app_context():
+        token = create_access_token(identity="test-user-regular")
+    return _bearer(token)
+
 
 
 # Führt jeden Test in einer eigenen Transaktion aus und rollt sie zurück.
 @pytest.fixture(autouse=True)
 def session_transaction(app):
     """Führt jeden Test in einer eigenen Transaktion aus und rollt sie zurück."""
-    conn = _db.engine.connect()
+    # Dieselbe Conn wie im app()-Fixture
+    conn = app.config['TEST_DB_CONN']
+
     trans = conn.begin()
-    # Binde die Session an diese Connection mithilfe scoped_session
     SessionLocal = scoped_session(sessionmaker(bind=conn))
-    _db.session = SessionLocal
+    db.session = SessionLocal
 
     yield
 
     SessionLocal.remove()
     trans.rollback()
-    conn.close()
+    # WICHTIG: conn NICHT hier schließen – das macht das app()-Fixture am Ende!
 
-@pytest.fixture
-def dm(app):
-    """Gibt eine frische DataManager-Instanz pro Test."""
-    return DataManager()
+@pytest.fixture()
+def artist_pending(app):
+    """Legt einen Artist mit Status 'pending' an und gibt ihn zurück."""
+    with app.app_context():
+        a = Artist(
+            name="Pending Paula",
+            email="paula@example.com",
+            supabase_user_id="user-pending-1",
+            approval_status="pending",
+        )
+        db.session.add(a)
+        db.session.commit()
+        return a
+
+@pytest.fixture()
+def artist_approved(app):
+    """Legt einen freigegebenen Artist (approved) an und gibt ihn zurück."""
+    with app.app_context():
+        a = Artist(
+            name="Approved Alex",
+            email="alex@example.com",
+            supabase_user_id="user-approved-1",
+            approval_status="approved",
+        )
+        db.session.add(a)
+        db.session.commit()
+        return a

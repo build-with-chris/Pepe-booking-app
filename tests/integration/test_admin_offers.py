@@ -92,3 +92,7 @@ def test_create_update_delete_admin_offer(client, admin_auth_headers, artist_man
     assert delete_resp.status_code == 200
     data = delete_resp.get_json()
     assert data.get('deleted') == offer['id']
+
+
+@pytest.mark.integration
+    def test_
