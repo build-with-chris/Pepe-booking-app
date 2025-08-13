@@ -135,44 +135,53 @@ def delete_admin_offer(offer_id):
 @swag_from('../resources/swagger/admin_artists_get.yml')
 def list_artists_by_status():
     """Listet Artists nach Freigabe-Status (default: pending)."""
-    claims = get_jwt()
-    app_md = claims.get('app_metadata') or {}
-    is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
-    if not is_admin:
-        user_id, artist = get_current_user()
-        is_admin = bool(artist and getattr(artist, 'is_admin', False))
-    if not is_admin:
-        return jsonify({'error': 'Not allowed'}), 403
+    logger.debug(f"[ADMIN] list_artists_by_status called; args={dict(request.args)}")
+    try:
+        claims = get_jwt()
+        app_md = claims.get('app_metadata') or {}
+        is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
+        if not is_admin:
+            user_id, artist = get_current_user()
+            is_admin = bool(artist and getattr(artist, 'is_admin', False))
+        logger.debug(f"[ADMIN] list_artists_by_status claims_role={claims.get('role')} app_meta_role={(app_md or {}).get('role')} resolved_is_admin={is_admin}")
+        if not is_admin:
+            return jsonify({'error': 'Not allowed'}), 403
 
-    status = (request.args.get('status') or 'pending').lower()
-    if status not in {'pending', 'approved', 'rejected', 'unsubmitted'}:
-        return jsonify({'error': 'invalid status'}), 400
+        status = (request.args.get('status') or 'pending').lower()
+        if status not in {'pending', 'approved', 'rejected', 'unsubmitted'}:
+            logger.warning(f"[ADMIN] invalid status parameter: {status}")
+            return jsonify({'error': 'invalid status'}), 400
 
-    if status == 'pending':
-        artists = artist_mgr.get_pending_artists()
-    elif status == 'approved':
-        artists = artist_mgr.get_approved_artists()
-    elif status == 'rejected':
-        artists = artist_mgr.get_rejected_artists()
-    else:
-        artists = artist_mgr.get_unsubmitted_artists()
+        if status == 'pending':
+            artists = artist_mgr.get_pending_artists()
+        elif status == 'approved':
+            artists = artist_mgr.get_approved_artists()
+        elif status == 'rejected':
+            artists = artist_mgr.get_rejected_artists()
+        else:
+            artists = artist_mgr.get_unsubmitted_artists()
 
-    def _serialize(a: Artist):
-        return {
-            'id': a.id,
-            'name': getattr(a, 'name', None),
-            'email': getattr(a, 'email', None),
-            'approval_status': getattr(a, 'approval_status', None),
-            'rejection_reason': getattr(a, 'rejection_reason', None),
-            'approved_at': a.approved_at.isoformat() if getattr(a, 'approved_at', None) else None,
-            'approved_by': getattr(a, 'approved_by', None),
-            'profile_image_url': getattr(a, 'profile_image_url', None),
-            'gallery_urls': getattr(a, 'gallery_urls', []),
-            'disciplines': getattr(a, 'disciplines', []),
-            'bio': getattr(a, 'bio', None),
-        }
+        logger.debug(f"[ADMIN] list_artists_by_status result_count={len(artists)} for status={status}")
 
-    return jsonify([_serialize(a) for a in artists]), 200
+        def _serialize(a: Artist):
+            return {
+                'id': a.id,
+                'name': getattr(a, 'name', None),
+                'email': getattr(a, 'email', None),
+                'approval_status': getattr(a, 'approval_status', None),
+                'rejection_reason': getattr(a, 'rejection_reason', None),
+                'approved_at': a.approved_at.isoformat() if getattr(a, 'approved_at', None) else None,
+                'approved_by': getattr(a, 'approved_by', None),
+                'profile_image_url': getattr(a, 'profile_image_url', None),
+                'gallery_urls': getattr(a, 'gallery_urls', []),
+                'disciplines': getattr(a, 'disciplines', []),
+                'bio': getattr(a, 'bio', None),
+            }
+
+        return jsonify([_serialize(a) for a in artists]), 200
+    except Exception as e:
+        logger.exception(f"[ADMIN] list_artists_by_status failed: {e}")
+        return jsonify({'error': 'internal error'}), 500
 
 
 @admin_bp.route('/artists/<int:artist_id>/approve', methods=['POST'])
@@ -180,28 +189,36 @@ def list_artists_by_status():
 @swag_from('../resources/swagger/admin_artists_id_approve_post.yml')
 def approve_artist(artist_id):
     """Gibt einen Artist frei (setzt approval_status=approved)."""
-    claims = get_jwt()
-    app_md = claims.get('app_metadata') or {}
-    is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
-    if not is_admin:
-        user_id, artist = get_current_user()
-        is_admin = bool(artist and getattr(artist, 'is_admin', False))
-    if not is_admin:
-        return jsonify({'error': 'Not allowed'}), 403
+    logger.debug(f"[ADMIN] approve_artist called; artist_id={artist_id}")
+    try:
+        claims = get_jwt()
+        app_md = claims.get('app_metadata') or {}
+        is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
+        if not is_admin:
+            user_id, artist = get_current_user()
+            is_admin = bool(artist and getattr(artist, 'is_admin', False))
+        logger.debug(f"[ADMIN] approve_artist claims_role={claims.get('role')} app_meta_role={(app_md or {}).get('role')} resolved_is_admin={is_admin}")
+        if not is_admin:
+            return jsonify({'error': 'Not allowed'}), 403
 
-    # admin user id aus JWT (falls vorhanden)
-    admin_id = claims.get('user_id') or claims.get('sub') or get_jwt_identity()
+        admin_id = claims.get('user_id') or claims.get('sub') or get_jwt_identity()
+        logger.debug(f"[ADMIN] approve_artist admin_id={admin_id}")
 
-    artist = offer_mgr.approve_artist(artist_id=artist_id, admin_id=admin_id)
-    if not artist:
-        return jsonify({'error': 'Not found'}), 404
+        artist = offer_mgr.approve_artist(artist_id=artist_id, admin_id=admin_id)
+        if not artist:
+            logger.warning(f"[ADMIN] approve_artist not found: artist_id={artist_id}")
+            return jsonify({'error': 'Not found'}), 404
 
-    return jsonify({
-        'id': artist.id,
-        'status': artist.approval_status,
-        'approved_at': artist.approved_at.isoformat() if artist.approved_at else None,
-        'approved_by': artist.approved_by,
-    }), 200
+        logger.info(f"[ADMIN] artist approved: artist_id={artist.id} by admin_id={admin_id}")
+        return jsonify({
+            'id': artist.id,
+            'status': artist.approval_status,
+            'approved_at': artist.approved_at.isoformat() if artist.approved_at else None,
+            'approved_by': artist.approved_by,
+        }), 200
+    except Exception as e:
+        logger.exception(f"[ADMIN] approve_artist failed for artist_id={artist_id}: {e}")
+        return jsonify({'error': 'internal error'}), 500
 
 
 @admin_bp.route('/artists/<int:artist_id>/reject', methods=['POST'])
@@ -209,30 +226,39 @@ def approve_artist(artist_id):
 @swag_from('../resources/swagger/admin_artists_id_reject_post.yml')
 def reject_artist(artist_id):
     """Lehnt einen Artist ab (approval_status=rejected) und speichert optionalen Grund."""
-    claims = get_jwt()
-    app_md = claims.get('app_metadata') or {}
-    is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
-    if not is_admin:
-        user_id, artist = get_current_user()
-        is_admin = bool(artist and getattr(artist, 'is_admin', False))
-    if not is_admin:
-        return jsonify({'error': 'Not allowed'}), 403
+    logger.debug(f"[ADMIN] reject_artist called; artist_id={artist_id}")
+    try:
+        claims = get_jwt()
+        app_md = claims.get('app_metadata') or {}
+        is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
+        if not is_admin:
+            user_id, artist = get_current_user()
+            is_admin = bool(artist and getattr(artist, 'is_admin', False))
+        logger.debug(f"[ADMIN] reject_artist claims_role={claims.get('role')} app_meta_role={(app_md or {}).get('role')} resolved_is_admin={is_admin}")
+        if not is_admin:
+            return jsonify({'error': 'Not allowed'}), 403
 
-    body = request.get_json(silent=True) or {}
-    reason = (body.get('reason') or body.get('comment') or '').strip()
-    admin_id = claims.get('user_id') or claims.get('sub') or get_jwt_identity()
+        body = request.get_json(silent=True) or {}
+        reason = (body.get('reason') or body.get('comment') or '').strip()
+        admin_id = claims.get('user_id') or claims.get('sub') or get_jwt_identity()
+        logger.debug(f"[ADMIN] reject_artist admin_id={admin_id} reason={reason!r}")
 
-    artist = offer_mgr.reject_artist(artist_id=artist_id, admin_id=admin_id, reason=reason)
-    if not artist:
-        return jsonify({'error': 'Not found'}), 404
+        artist = offer_mgr.reject_artist(artist_id=artist_id, admin_id=admin_id, reason=reason)
+        if not artist:
+            logger.warning(f"[ADMIN] reject_artist not found: artist_id={artist_id}")
+            return jsonify({'error': 'Not found'}), 404
 
-    return jsonify({
-        'id': artist.id,
-        'status': artist.approval_status,
-        'rejection_reason': artist.rejection_reason,
-        'approved_at': artist.approved_at.isoformat() if artist.approved_at else None,
-        'approved_by': artist.approved_by,
-    }), 200
+        logger.info(f"[ADMIN] artist rejected: artist_id={artist.id} by admin_id={admin_id} reason={reason!r}")
+        return jsonify({
+            'id': artist.id,
+            'status': artist.approval_status,
+            'rejection_reason': artist.rejection_reason,
+            'approved_at': artist.approved_at.isoformat() if artist.approved_at else None,
+            'approved_by': artist.approved_by,
+        }), 200
+    except Exception as e:
+        logger.exception(f"[ADMIN] reject_artist failed for artist_id={artist_id}: {e}")
+        return jsonify({'error': 'internal error'}), 500
 
 # -------------------------------------------------------------
 # Per-Artist-Status einer Anfrage (Admin) 08.08.25
