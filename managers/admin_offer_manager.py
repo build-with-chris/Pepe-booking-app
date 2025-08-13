@@ -1,4 +1,4 @@
-from models import db, AdminOffer
+from models import db, AdminOffer, Artist
 
 class AdminOfferManager:
     """
@@ -60,4 +60,35 @@ class AdminOfferManager:
             'override_price': offer.override_price,
             'notes': offer.notes,
             'created_at': offer.created_at.isoformat() if offer.created_at else None
+        }
+
+    # --- Admin: Artist-Freigaben ---
+    def approve_artist(self, artist_id: int, admin_id: int | None = None):
+        """Setzt den Artist auf 'approved' und speichert Admin/Datum."""
+        artist = Artist.query.get(artist_id)
+        if not artist:
+            return None
+        # nutzt die Model-Methode aus Artist
+        artist.approve(admin_id=admin_id)
+        self.db.session.commit()
+        return artist
+
+    def reject_artist(self, artist_id: int, admin_id: int | None = None, reason: str | None = None):
+        """Setzt den Artist auf 'rejected' mit optionaler Begründung und speichert Admin/Datum."""
+        artist = Artist.query.get(artist_id)
+        if not artist:
+            return None
+        artist.reject(admin_id=admin_id, reason=reason)
+        self.db.session.commit()
+        return artist
+
+    def serialize_artist(self, artist):
+        return {
+            'id': artist.id,
+            'name': artist.name,
+            'email': getattr(artist, 'email', None),
+            'approval_status': getattr(artist, 'approval_status', None),
+            'rejection_reason': getattr(artist, 'rejection_reason', None),
+            'approved_at': artist.approved_at.isoformat() if getattr(artist, 'approved_at', None) else None,
+            'approved_by': getattr(artist, 'approved_by', None),
         }

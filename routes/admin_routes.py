@@ -4,6 +4,7 @@ from routes.api_routes import get_current_user
 from managers.booking_requests_manager import BookingRequestManager
 from managers.admin_offer_manager import AdminOfferManager
 from managers.availability_manager import AvailabilityManager
+from managers.artist_manager import ArtistManager
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from models import Artist
 import logging
@@ -21,6 +22,7 @@ admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 request_mgr = BookingRequestManager()
 offer_mgr = AdminOfferManager()
 avail_mgr = AvailabilityManager()
+artist_mgr = ArtistManager()
 
 # Admin rights
 @admin_bp.route('/requests/all', methods=['GET'])
@@ -124,6 +126,113 @@ def delete_admin_offer(offer_id):
     if not deleted:
         return jsonify({'error': 'Not found'}), 404
     return jsonify({'deleted': deleted.id})
+
+# -------------------------------------------------------------
+# Admin: Artist-Freigaben (Listen, Approve, Reject)
+# -------------------------------------------------------------
+@admin_bp.route('/artists', methods=['GET'])
+@jwt_required()
+@swag_from('../resources/swagger/admin_artists_get.yml')
+def list_artists_by_status():
+    """Listet Artists nach Freigabe-Status (default: pending)."""
+    claims = get_jwt()
+    app_md = claims.get('app_metadata') or {}
+    is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
+    if not is_admin:
+        user_id, artist = get_current_user()
+        is_admin = bool(artist and getattr(artist, 'is_admin', False))
+    if not is_admin:
+        return jsonify({'error': 'Not allowed'}), 403
+
+    status = (request.args.get('status') or 'pending').lower()
+    if status not in {'pending', 'approved', 'rejected', 'unsubmitted'}:
+        return jsonify({'error': 'invalid status'}), 400
+
+    if status == 'pending':
+        artists = artist_mgr.get_pending_artists()
+    elif status == 'approved':
+        artists = artist_mgr.get_approved_artists()
+    elif status == 'rejected':
+        artists = artist_mgr.get_rejected_artists()
+    else:
+        artists = artist_mgr.get_unsubmitted_artists()
+
+    def _serialize(a: Artist):
+        return {
+            'id': a.id,
+            'name': getattr(a, 'name', None),
+            'email': getattr(a, 'email', None),
+            'approval_status': getattr(a, 'approval_status', None),
+            'rejection_reason': getattr(a, 'rejection_reason', None),
+            'approved_at': a.approved_at.isoformat() if getattr(a, 'approved_at', None) else None,
+            'approved_by': getattr(a, 'approved_by', None),
+            'profile_image_url': getattr(a, 'profile_image_url', None),
+            'gallery_urls': getattr(a, 'gallery_urls', []),
+            'disciplines': getattr(a, 'disciplines', []),
+            'bio': getattr(a, 'bio', None),
+        }
+
+    return jsonify([_serialize(a) for a in artists]), 200
+
+
+@admin_bp.route('/artists/<int:artist_id>/approve', methods=['POST'])
+@jwt_required()
+@swag_from('../resources/swagger/admin_artists_id_approve_post.yml')
+def approve_artist(artist_id):
+    """Gibt einen Artist frei (setzt approval_status=approved)."""
+    claims = get_jwt()
+    app_md = claims.get('app_metadata') or {}
+    is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
+    if not is_admin:
+        user_id, artist = get_current_user()
+        is_admin = bool(artist and getattr(artist, 'is_admin', False))
+    if not is_admin:
+        return jsonify({'error': 'Not allowed'}), 403
+
+    # admin user id aus JWT (falls vorhanden)
+    admin_id = claims.get('user_id') or claims.get('sub') or get_jwt_identity()
+
+    artist = offer_mgr.approve_artist(artist_id=artist_id, admin_id=admin_id)
+    if not artist:
+        return jsonify({'error': 'Not found'}), 404
+
+    return jsonify({
+        'id': artist.id,
+        'status': artist.approval_status,
+        'approved_at': artist.approved_at.isoformat() if artist.approved_at else None,
+        'approved_by': artist.approved_by,
+    }), 200
+
+
+@admin_bp.route('/artists/<int:artist_id>/reject', methods=['POST'])
+@jwt_required()
+@swag_from('../resources/swagger/admin_artists_id_reject_post.yml')
+def reject_artist(artist_id):
+    """Lehnt einen Artist ab (approval_status=rejected) und speichert optionalen Grund."""
+    claims = get_jwt()
+    app_md = claims.get('app_metadata') or {}
+    is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
+    if not is_admin:
+        user_id, artist = get_current_user()
+        is_admin = bool(artist and getattr(artist, 'is_admin', False))
+    if not is_admin:
+        return jsonify({'error': 'Not allowed'}), 403
+
+    body = request.get_json(silent=True) or {}
+    reason = (body.get('reason') or body.get('comment') or '').strip()
+    admin_id = claims.get('user_id') or claims.get('sub') or get_jwt_identity()
+
+    artist = offer_mgr.reject_artist(artist_id=artist_id, admin_id=admin_id, reason=reason)
+    if not artist:
+        return jsonify({'error': 'Not found'}), 404
+
+    return jsonify({
+        'id': artist.id,
+        'status': artist.approval_status,
+        'rejection_reason': artist.rejection_reason,
+        'approved_at': artist.approved_at.isoformat() if artist.approved_at else None,
+        'approved_by': artist.approved_by,
+    }), 200
 
 # -------------------------------------------------------------
 # Per-Artist-Status einer Anfrage (Admin) 08.08.25

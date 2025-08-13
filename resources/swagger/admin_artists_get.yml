@@ -1,0 +1,58 @@
+swagger: "2.0"
+info:
+  title: Admin – Artists nach Status
+  version: "1.0"
+  description: Liste von Artists gefiltert nach approval_status.
+tags:
+  - Admin
+securityDefinitions:
+  bearerAuth:
+    type: apiKey
+    name: Authorization
+    in: header
+    description: 'JWT im Format: Bearer <token>'
+paths:
+  /admin/artists:
+    get:
+      tags: [Admin]
+      summary: Liste Artists nach Status
+      description: |
+        Erfordert Admin-Rechte. Filter über Query-Param `status`.
+        Zulässige Werte: `pending`, `approved`, `rejected`, `unsubmitted`.
+        Default: `pending`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          type: string
+          enum: [pending, approved, rejected, unsubmitted]
+          default: pending
+      responses:
+        200:
+          description: OK
+          schema:
+            type: array
+            items:
+              type: object
+              properties:
+                id: { type: integer, example: 42 }
+                name: { type: string, example: "Jane Doe" }
+                email: { type: string, example: "jane@pepeshows.de" }
+                approval_status: { type: string, example: "pending" }
+                rejection_reason: { type: string, example: "Profil unvollständig", nullable: true }
+                approved_at: { type: string, example: "2025-08-10T12:34:56Z", nullable: true }
+                approved_by: { type: integer, example: 7, nullable: true }
+                profile_image_url: { type: string, example: "https://..." }
+                gallery_urls:
+                  type: array
+                  items: { type: string }
+                disciplines:
+                  type: array
+                  items: { type: string }
+                bio: { type: string }
+        400:
+          description: Ungültiger Status
+        403:
+          description: Nicht erlaubt (kein Admin)

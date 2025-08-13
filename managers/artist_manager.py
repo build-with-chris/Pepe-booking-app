@@ -22,6 +22,22 @@ class ArtistManager:
         """Gibt eine Liste aller Artists zurück."""
         return Artist.query.all()
 
+    def get_pending_artists(self):
+        """Gibt alle Artists mit Status 'pending' zurück."""
+        return Artist.query.filter_by(approval_status='pending').all()
+
+    def get_approved_artists(self):
+        """Gibt alle freigegebenen Artists zurück."""
+        return Artist.query.filter_by(approval_status='approved').all()
+
+    def get_rejected_artists(self):
+        """Gibt alle abgelehnten Artists zurück."""
+        return Artist.query.filter_by(approval_status='rejected').all()
+
+    def get_unsubmitted_artists(self):
+        """Gibt alle (noch) nicht eingereichten Artists zurück."""
+        return Artist.query.filter_by(approval_status='unsubmitted').all()
+
     def get_artist(self, artist_id):
         """Gibt den Artist mit der angegebenen ID zurück oder None."""
         return Artist.query.get(artist_id)

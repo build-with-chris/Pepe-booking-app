@@ -47,6 +47,15 @@ class Artist(UserMixin, db.Model):
     price_max      = db.Column(db.Integer, default=1900)
     supabase_user_id = db.Column(db.String(255), unique=True, nullable=True)
 
+    # Admin-Freigabe
+    approval_status  = db.Column(db.String(20), nullable=False, server_default='unsubmitted')  # unsubmitted | pending | approved | rejected
+    rejection_reason = db.Column(db.Text, nullable=True)
+    approved_at      = db.Column(db.DateTime, nullable=True)
+    approved_by      = db.Column(db.Integer, db.ForeignKey('artists.id'), nullable=True)
+
+    # Beziehung: Admin, der den Artist freigegeben/abgelehnt hat (self-referenziell)
+    approved_by_admin = db.relationship('Artist', foreign_keys=[approved_by], remote_side=[id])
+
     # Öffentliches Profil
     profile_image_url = db.Column(db.String(512), nullable=True)
     bio               = db.Column(db.Text, nullable=True)

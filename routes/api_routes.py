@@ -35,17 +35,13 @@ def get_current_user():
     return user_id, artist
 
 
-@api_bp.route('/greet')
-def greet_pepe():
-    return "Hello Pepe"
-
-
 # Artists
 @api_bp.route('/artists', methods=['GET'])
 @swag_from('../resources/swagger/artists_get.yml')
 def list_artists():
     """Gibt alle Artists als JSON-Liste zurück."""
-    artists = artist_mgr.get_all_artists()
+    # Nur freigegebene Artists öffentlich listen
+    artists = artist_mgr.get_approved_artists()
     return jsonify([{
         'id': a.id,
         'name': a.name,
@@ -101,6 +97,7 @@ def create_artist():
 # Own artist profile: read
 @api_bp.route('/artists/me', methods=['GET'])
 @jwt_required()
+@swag_from('../resources/swagger/artists_me_get.yml')
 def get_my_artist():
     """Liefert das eigene Artist-Profil (inkl. Bild & Bio) der eingeloggten Person."""
     user_id, artist = get_current_user()
@@ -118,12 +115,15 @@ def get_my_artist():
         'profile_image_url': getattr(artist, 'profile_image_url', None),
         'bio': getattr(artist, 'bio', None),
         'instagram': getattr(artist, 'instagram', None),
-        'gallery_urls': getattr(artist, 'gallery_urls', []) or []
+        'gallery_urls': getattr(artist, 'gallery_urls', []) or [],
+        'approval_status': getattr(artist, 'approval_status', None),
+        'rejection_reason': getattr(artist, 'rejection_reason', None),
     }), 200
 
 
 @api_bp.route('/artists/me/profile', methods=['PUT', 'PATCH'])
 @jwt_required()
+@swag_from('../resources/swagger/artists_me_profile_put.yml')
 def update_my_profile():
     """Aktualisiert das öffentliche Profil (Profilbild-URL, Bio, Instagram & Galerie-URLs) des eingeloggten Artists."""
     user_id, artist = get_current_user()
@@ -135,6 +135,7 @@ def update_my_profile():
     bio = payload.get('bio')
     instagram = payload.get('instagram')
     gallery_urls = payload.get('gallery_urls')
+    req_status = payload.get('approval_status')
 
     if all(v is None for v in (img_url, bio, instagram, gallery_urls)):
         return jsonify({'error': 'Nothing to update (one of profile_image_url, bio, instagram, gallery_urls required)'}), 400
@@ -157,6 +158,13 @@ def update_my_profile():
             artist.instagram = (instagram.strip() or None)
         if gallery_urls is not None:
             artist.gallery_urls = gallery_urls
+        # Optional: Einreichen zur Prüfung – nur 'pending' ist vom Artist aus erlaubt
+        if req_status is not None:
+            req_status = str(req_status).strip().lower()
+            current_status = (getattr(artist, 'approval_status', 'unsubmitted') or 'unsubmitted').lower()
+            if req_status == 'pending' and current_status != 'approved':
+                artist.approval_status = 'pending'
+                artist.rejection_reason = None
 
         db.session.commit()
         return jsonify({
@@ -165,6 +173,8 @@ def update_my_profile():
             'bio': getattr(artist, 'bio', None),
             'instagram': getattr(artist, 'instagram', None),
             'gallery_urls': getattr(artist, 'gallery_urls', []) or [],
+            'approval_status': getattr(artist, 'approval_status', None),
+            'rejection_reason': getattr(artist, 'rejection_reason', None),
         }), 200
     except Exception as e:
         logger.exception('Failed to update own profile')
@@ -173,6 +183,7 @@ def update_my_profile():
 
 @api_bp.route('/artists/email/<string:email>', methods=['GET'])
 @jwt_required()
+@swag_from('../resources/swagger/artists_email_get.yml')
 def get_artist_by_email(email):
     artist = artist_mgr.get_artist_by_email(email)
     if not artist:
@@ -424,6 +435,7 @@ def remove_availability(slot_id):
     return jsonify({'deleted': slot_id})
 @api_bp.route('/requests/requests', methods=['GET'])
 @jwt_required()
+@swag_from('../resources/swagger/booking_requests_get.yml')
 def list_my_booking_requests():
     """Gibt die für den eingeloggten Artist relevanten BookingRequests zurück (mit Empfehlung)."""
     user_id = get_jwt_identity()
@@ -432,6 +444,9 @@ def list_my_booking_requests():
     if not artist:
         logger.warning(f"Current user {user_id} not linked to an artist")
         return jsonify({'error': 'Current user not linked to an artist'}), 403
+    # Nur freigegebene Artists können Anfragen erhalten/einsehen
+    if getattr(artist, 'approval_status', '') != 'approved':
+        return jsonify({'error': 'Artist not approved yet'}), 403
     logger.debug(f"Resolved artist: id={artist.id}, supabase_user_id={artist.supabase_user_id}")
     requests = request_mgr.get_requests_for_artist_with_recommendation(artist.id)
 
@@ -451,12 +466,15 @@ def list_my_booking_requests():
 # Combined GET/PUT endpoint for artist offer
 @api_bp.route('/requests/requests/<int:req_id>/offer', methods=['GET', 'PUT'])
 @jwt_required()
+@swag_from('../resources/swagger/requests_offer_get_put.yml')
 def artist_offer(req_id):
     """GET: liefert das eigene Angebot; PUT: speichert/aktualisiert die eigene Gage und setzt Status auf 'angeboten'."""
     user_id, artist = get_current_user()
     logger.debug(f"artist_offer called by supabase_user_id={user_id} for req_id={req_id} method={request.method}")
     if not artist:
         return jsonify({'error': 'Current user not linked to an artist'}), 403
+    if getattr(artist, 'approval_status', '') != 'approved':
+        return jsonify({'error': 'Artist not approved yet'}), 403
 
     if request.method == 'PUT':
         try:

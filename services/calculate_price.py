@@ -14,7 +14,7 @@ def calculate_price(base_min, base_max,
     2. Gästezahl-Multiplikator (≤200 ×1.0, 201–500 ×1.2, >500 ×1.35)
     3. Wochenend- oder Wochentag-Modifikator
     4. Newsletter-Rabatt
-    5. Indoor- vs. Outdoor-Faktor
+    5. Indoor- vs. Outdoor-Faktor 
     6. Technikpauschalen (Licht, Sound)
     7. Basis-Agenturgebühr (fee_pct)
     8. Distanzzuschläge (ab 300 km +200 €, ab 600 km +300 €, München –100 €)
@@ -22,10 +22,10 @@ def calculate_price(base_min, base_max,
     """
     # 1. Event type
     event_weights = {
-        'Private Feier': 0.7,
-        'Firmenfeier':   1.3,
-        'Incentive':     1.05,
-        'Streetshow':    0.9
+        'Private Feier': 0.6,
+        'Firmenfeier':   1.5,
+        'Teamevent':     1.05,
+        'Streetshow':    0.7
     }
     # Verhindere Untergewichtung bei Private Feier, wenn Gage manuell kommt
     if base_min == base_max:
@@ -71,8 +71,8 @@ def calculate_price(base_min, base_max,
 
     # 6. Tech fees
     tech_fee = 0
-    if needs_light: tech_fee += 50
-    if needs_sound: tech_fee += 75
+    if needs_light: tech_fee += 450
+    if needs_sound: tech_fee += 450
 
     # 7. Agency fee
     min_p *= (1 + fee_pct/100)

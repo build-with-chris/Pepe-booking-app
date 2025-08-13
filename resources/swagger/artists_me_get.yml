@@ -1,0 +1,51 @@
+swagger: "2.0"
+info:
+  title: Mein Artist-Profil abrufen
+  version: "1.0"
+  description: Liefert das eigene Artist-Profil der eingeloggten Person.
+tags:
+  - Artists
+securityDefinitions:
+  bearerAuth:
+    type: apiKey
+    name: Authorization
+    in: header
+    description: "JWT im Format: Bearer <token>"
+paths:
+  /artists/me:
+    get:
+      tags: [Artists]
+      security: [{ bearerAuth: [] }]
+      summary: Eigenes Artist-Profil
+      responses:
+        200:
+          description: OK
+          schema:
+            type: object
+            properties:
+              id: { type: integer, example: 12 }
+              name: { type: string, example: "Jane Doe" }
+              email: { type: string, example: "jane@pepeshows.de" }
+              address: { type: string, example: "Musterstraße 1, 80331 München" }
+              phone_number: { type: string, example: "+49 89 123456" }
+              disciplines:
+                type: array
+                items: { type: string }
+              price_min: { type: integer, example: 1500 }
+              price_max: { type: integer, example: 1900 }
+              profile_image_url: { type: string, example: "https://..." }
+              bio: { type: string, example: "Kurzbeschreibung..." }
+              instagram: { type: string, example: "https://instagram.com/…" }
+              gallery_urls:
+                type: array
+                items: { type: string }
+              approval_status:
+                type: string
+                enum: [unsubmitted, pending, approved, rejected]
+                example: pending
+              rejection_reason:
+                type: string
+                nullable: true
+                example: "Profilbild fehlt"
+        403:
+          description: Current user not linked to an artist

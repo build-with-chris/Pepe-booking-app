@@ -1,0 +1,41 @@
+swagger: "2.0"
+info:
+  title: Admin – Artist freigeben
+  version: "1.0"
+  description: Setzt `approval_status=approved` für einen Artist.
+tags:
+  - Admin
+securityDefinitions:
+  bearerAuth:
+    type: apiKey
+    name: Authorization
+    in: header
+    description: 'JWT im Format: Bearer <token>'
+paths:
+  /admin/artists/{artist_id}/approve:
+    post:
+      tags: [Admin]
+      summary: Artist freigeben
+      description: Erfordert Admin-Rechte.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: artist_id
+          in: path
+          required: true
+          type: integer
+          example: 42
+      responses:
+        200:
+          description: OK
+          schema:
+            type: object
+            properties:
+              id: { type: integer, example: 42 }
+              status: { type: string, example: "approved" }
+              approved_at: { type: string, example: "2025-08-10T12:34:56Z" }
+              approved_by: { type: integer, example: 7 }
+        403:
+          description: Nicht erlaubt (kein Admin)
+        404:
+          description: Artist nicht gefunden
