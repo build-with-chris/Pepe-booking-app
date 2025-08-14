@@ -1,6 +1,6 @@
 from flask import request, jsonify
 from flask import Blueprint
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from services.calculate_price import calculate_price
 from flasgger import swag_from
 from managers.artist_manager import ArtistManager
@@ -31,7 +31,24 @@ def get_current_user():
     try:
         artist = artist_mgr.get_artist_by_supabase_user_id(user_id)
     except Exception:
-        pass
+        artist = None
+
+    # Fallback: Wenn kein Artist per supabase_user_id gefunden wurde, per E-Mail suchen
+    if not artist:
+        try:
+            claims = get_jwt()
+            email = claims.get("email") or claims.get("user_metadata", {}).get("email")
+            if email:
+                fallback = artist_mgr.get_artist_by_email(email)
+                if fallback and not getattr(fallback, "supabase_user_id", None):
+                    # Linke die Supabase-UID an den bestehenden Artist und speichere
+                    fallback.supabase_user_id = user_id
+                    db.session.commit()
+                    artist = fallback
+        except Exception:
+            # still no artist; leave as None
+            pass
+
     return user_id, artist
 
 
@@ -95,6 +112,7 @@ def create_artist():
 
 
 # Own artist profile: read
+
 @api_bp.route('/artists/me', methods=['GET'])
 @jwt_required()
 @swag_from('../resources/swagger/artists_me_get.yml')
@@ -119,6 +137,34 @@ def get_my_artist():
         'approval_status': getattr(artist, 'approval_status', None),
         'rejection_reason': getattr(artist, 'rejection_reason', None),
     }), 200
+
+
+# Explizite Freigabe anfordern (Status -> pending)
+@api_bp.route('/artists/me/submit_review', methods=['POST'])
+@jwt_required()
+@swag_from('../resources/swagger/artists_me_submit_review_post.yml', validation=False)
+def submit_my_profile_for_review():
+    """Setzt den Freigabe-Status des eingeloggten Artists auf 'pending' (sofern nicht bereits 'approved')."""
+    user_id, artist = get_current_user()
+    if not artist:
+        return jsonify({'error': 'Current user not linked to an artist'}), 403
+
+    try:
+        current_status = (getattr(artist, 'approval_status', 'unsubmitted') or 'unsubmitted').lower()
+        if current_status != 'approved':
+            artist.approval_status = 'pending'
+            # vorherige Ablehnungsgründe entfernen
+            if hasattr(artist, 'rejection_reason'):
+                artist.rejection_reason = None
+            db.session.commit()
+        return jsonify({
+            'id': artist.id,
+            'approval_status': getattr(artist, 'approval_status', None),
+            'rejection_reason': getattr(artist, 'rejection_reason', None),
+        }), 200
+    except Exception as e:
+        logger.exception('Failed to submit profile for review')
+        return jsonify({'error': 'Failed to submit review', 'details': str(e)}), 500
 
 
 @api_bp.route('/artists/me/profile', methods=['PUT', 'PATCH'])
