@@ -25,28 +25,51 @@ api_bp = Blueprint('api', __name__)
 
 
 def get_current_user():
-    """Gibt ein Tupel (user_id, artist) des aktuell authentifizierten JWT-Users zurück (über supabase_user_id)."""
+    """Gibt ein Tupel (user_id, artist) des aktuell authentifizierten JWT-Users zurück.
+    Reihenfolge:
+      1) Lookup per supabase_user_id (JWT identity)
+      2) Fallback per E-Mail aus JWT-Claims und ggf. UID verknüpfen
+      3) Falls noch nichts gefunden, aber eine E-Mail vorhanden ist: Minimal-Artist automatisch anlegen (status='unsubmitted')
+    """
     user_id = get_jwt_identity()
     artist = None
+
+    # 1) Direkt über UID versuchen
     try:
         artist = artist_mgr.get_artist_by_supabase_user_id(user_id)
     except Exception:
         artist = None
 
-    # Fallback: Wenn kein Artist per supabase_user_id gefunden wurde, per E-Mail suchen
+    # 2) Fallback per E-Mail (und UID verknüpfen)
     if not artist:
         try:
             claims = get_jwt()
             email = claims.get("email") or claims.get("user_metadata", {}).get("email")
+            name = claims.get("name") or claims.get("user_metadata", {}).get("name")
             if email:
                 fallback = artist_mgr.get_artist_by_email(email)
-                if fallback and not getattr(fallback, "supabase_user_id", None):
-                    # Linke die Supabase-UID an den bestehenden Artist und speichere
-                    fallback.supabase_user_id = user_id
-                    db.session.commit()
+                if fallback:
+                    if not getattr(fallback, "supabase_user_id", None):
+                        fallback.supabase_user_id = user_id
+                        db.session.commit()
                     artist = fallback
+                else:
+                    # 3) Minimal-Artist automatisch anlegen (erstes Login)
+                    from models import Artist
+                    try:
+                        new_artist = Artist(
+                            name=name or (email.split("@")[0] if isinstance(email, str) else None),
+                            email=email,
+                            supabase_user_id=user_id,
+                            approval_status="unsubmitted",
+                        )
+                        db.session.add(new_artist)
+                        db.session.commit()
+                        artist = new_artist
+                    except Exception:
+                        db.session.rollback()
         except Exception:
-            # still no artist; leave as None
+            # Keine Claims/E-Mail verfügbar
             pass
 
     return user_id, artist
@@ -171,50 +194,102 @@ def submit_my_profile_for_review():
 @jwt_required()
 @swag_from('../resources/swagger/artists_me_profile_put.yml')
 def update_my_profile():
-    """Aktualisiert das öffentliche Profil (Profilbild-URL, Bio, Instagram & Galerie-URLs) des eingeloggten Artists."""
+    """Aktualisiert das Profil des eingeloggten Artists (Name, Adresse, Telefon, Preise, Disziplinen,
+    Profilbild-URL, Bio, Instagram, Galerie-URLs). Optional kann approval_status='pending' gesetzt werden.
+    """
     user_id, artist = get_current_user()
     if not artist:
         return jsonify({'error': 'Current user not linked to an artist'}), 403
 
     payload = request.get_json(silent=True) or {}
+
+    # Einzeln auslesen (alle Felder sind optional)
+    name = payload.get('name')
+    address = payload.get('address')
+    phone_number = payload.get('phone_number')
+    price_min = payload.get('price_min')
+    price_max = payload.get('price_max')
+    disciplines = payload.get('disciplines')  # erwartet Liste[str]
+
     img_url = payload.get('profile_image_url')
     bio = payload.get('bio')
     instagram = payload.get('instagram')
     gallery_urls = payload.get('gallery_urls')
     req_status = payload.get('approval_status')
 
-    if all(v is None for v in (img_url, bio, instagram, gallery_urls)):
-        return jsonify({'error': 'Nothing to update (one of profile_image_url, bio, instagram, gallery_urls required)'}), 400
+    updatable_keys = [
+        name, address, phone_number, price_min, price_max, disciplines,
+        img_url, bio, instagram, gallery_urls, req_status
+    ]
+    if all(v is None for v in updatable_keys):
+        return jsonify({'error': 'Nothing to update'}), 400
 
-    # validate gallery_urls if present
+    # Validierungen
     if gallery_urls is not None:
         if not isinstance(gallery_urls, list):
             return jsonify({'error': 'gallery_urls must be a list of URLs'}), 400
-        # nur Strings, max. 3 Elemente
         gallery_urls = [str(u).strip() for u in gallery_urls if isinstance(u, (str, bytes))]
         if len(gallery_urls) > 3:
             return jsonify({'error': 'gallery_urls may contain at most 3 items'}), 400
 
+    if disciplines is not None and not isinstance(disciplines, list):
+        return jsonify({'error': 'disciplines must be a list of strings'}), 400
+
     try:
+        # Primitive Felder
+        if name is not None:
+            artist.name = str(name).strip() or artist.name
+        if address is not None:
+            artist.address = str(address).strip() or None
+        if phone_number is not None:
+            artist.phone_number = str(phone_number).strip() or None
+        if price_min is not None:
+            artist.price_min = price_min
+        if price_max is not None:
+            artist.price_max = price_max
+
+        # Social / Media
         if img_url is not None:
             artist.profile_image_url = (img_url or None)
         if bio is not None:
             artist.bio = (str(bio).strip()[:1000] if bio is not None else None)
         if instagram is not None:
-            artist.instagram = (instagram.strip() or None)
+            artist.instagram = (instagram.strip() or None) if isinstance(instagram, str) else None
         if gallery_urls is not None:
             artist.gallery_urls = gallery_urls
+
+        # Disziplinen
+        if disciplines is not None:
+            def get_or_create_discipline(name: str):
+                disc = Discipline.query.filter_by(name=name).first()
+                if not disc:
+                    disc = Discipline(name=name)
+                    db.session.add(disc)
+                    db.session.flush()
+                return disc
+            artist.disciplines = [get_or_create_discipline(str(d).strip()) for d in disciplines if str(d).strip()]
+
         # Optional: Einreichen zur Prüfung – nur 'pending' ist vom Artist aus erlaubt
         if req_status is not None:
             req_status = str(req_status).strip().lower()
             current_status = (getattr(artist, 'approval_status', 'unsubmitted') or 'unsubmitted').lower()
             if req_status == 'pending' and current_status != 'approved':
                 artist.approval_status = 'pending'
-                artist.rejection_reason = None
+                if hasattr(artist, 'rejection_reason'):
+                    artist.rejection_reason = None
 
         db.session.commit()
+
+        # Antwort mit allen wichtigen Feldern
         return jsonify({
             'id': artist.id,
+            'name': artist.name,
+            'email': artist.email,
+            'address': getattr(artist, 'address', None),
+            'phone_number': artist.phone_number,
+            'disciplines': [d.name for d in artist.disciplines],
+            'price_min': getattr(artist, 'price_min', None),
+            'price_max': getattr(artist, 'price_max', None),
             'profile_image_url': getattr(artist, 'profile_image_url', None),
             'bio': getattr(artist, 'bio', None),
             'instagram': getattr(artist, 'instagram', None),
@@ -224,6 +299,7 @@ def update_my_profile():
         }), 200
     except Exception as e:
         logger.exception('Failed to update own profile')
+        db.session.rollback()
         return jsonify({'error': 'Failed to update profile', 'details': str(e)}), 500
 
 
