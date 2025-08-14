@@ -161,9 +161,9 @@ def list_artists_by_status():
                 artists = artist_mgr.get_rejected_artists()
             else:
                 artists = artist_mgr.get_unsubmitted_artists()
-        except Exception:
-            logger.exception(f"[ADMIN] list_artists_by_status query failed for status={status}")
-            artists = []
+        except Exception as ex:
+            logger.exception(f"[ADMIN] list_artists_by_status query failed for status={status}: {ex}")
+            raise
 
         logger.debug(f"[ADMIN] list_artists_by_status result_count={len(artists)} for status={status}")
 
