@@ -20,6 +20,12 @@ def mask_db_uri(uri: str) -> str:
     import re
     return re.sub(r'(://[^:]+:)([^@]+)(@)', r"\1****\3", uri)
 
+
+app.logger.info("DB URI: %s | TESTING=%s | ENV=%s",
+                app.config.get("SQLALCHEMY_DATABASE_URI"),
+                app.config.get("TESTING"),
+                os.getenv("FLASK_CONFIG") or os.getenv("FLASK_ENV") or "unset")
+
 logging.getLogger().info(f"Using DB URI: {mask_db_uri(app.config.get('SQLALCHEMY_DATABASE_URI',''))}")
 db.init_app(app)
 migrate = Migrate(app, db)
