@@ -40,7 +40,7 @@ class Artist(UserMixin, db.Model):
     email          = db.Column(db.String(120), nullable=False, unique=True)
     phone_number   = db.Column(db.String(20), nullable=True)
     address        = db.Column(db.String(200), nullable=True)
-    password_hash  = db.Column(db.Text(), nullable=False)
+    password_hash  = db.Column(db.Text(), nullable=True)
     push_token     = db.Column(db.String(200), nullable=True)  # for push notifications
     is_admin       = db.Column(db.Boolean, default=False)
     price_min      = db.Column(db.Integer, default=1500)
