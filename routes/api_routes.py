@@ -227,6 +227,31 @@ def update_my_profile():
         return jsonify({'error': 'Failed to update profile', 'details': str(e)}), 500
 
 
+@api_bp.route('/artists/me/ensure', methods=['POST'])
+@jwt_required()
+@swag_from('../resources/swagger/artists_me_ensure_post.yml', validation=False)
+def ensure_my_artist():
+    """Ensure an Artist row exists for current Supabase user; return it."""
+    user_id, artist = get_current_user()
+    if not artist:
+        return jsonify({'error': 'Unable to ensure artist for current user'}), 500
+    return jsonify({
+        'id': artist.id,
+        'name': artist.name,
+        'email': artist.email,
+        'address': getattr(artist, 'address', None),
+        'phone_number': artist.phone_number,
+        'disciplines': [d.name for d in artist.disciplines],
+        'price_min': getattr(artist, 'price_min', None),
+        'price_max': getattr(artist, 'price_max', None),
+        'profile_image_url': getattr(artist, 'profile_image_url', None),
+        'bio': getattr(artist, 'bio', None),
+        'instagram': getattr(artist, 'instagram', None),
+        'gallery_urls': getattr(artist, 'gallery_urls', []) or [],
+        'approval_status': getattr(artist, 'approval_status', None),
+        'rejection_reason': getattr(artist, 'rejection_reason', None),
+    }), 200
+
 @api_bp.route('/artists/email/<string:email>', methods=['GET'])
 @jwt_required()
 @swag_from('../resources/swagger/artists_email_get.yml')
