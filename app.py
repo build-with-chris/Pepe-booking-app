@@ -9,7 +9,9 @@ from flasgger import Swagger
 from flask_cors import CORS
 from routes.request_routes import booking_bp
 from flask_migrate import Migrate
+
 import logging
+import os
 
 
 
@@ -69,8 +71,18 @@ app.config['SWAGGER'] = {
     'title': "Pepe Backend API",
     'uiversion': 2
 }
+
 Swagger(app, template=template)
-CORS(app)  
+CORS(app)
+
+
+# Debug route for DB config
+@app.get("/__debug/db")
+def debug_db():
+    return {
+        "uri": app.config.get("SQLALCHEMY_DATABASE_URI"),
+        "testing": app.config.get("TESTING", False)
+    }
 
 
 if __name__=="__main__":
