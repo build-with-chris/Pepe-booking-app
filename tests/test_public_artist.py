@@ -3,7 +3,7 @@ def test_public_artists_shows_only_approved(client, artist_pending, artist_appro
     resp = client.get("/api/artists")
     assert resp.status_code == 200
     data = resp.get_json()
-    # Je nach Implementierung: Liste direkt oder unter "artists"
+
     artists = data if isinstance(data, list) else data.get("artists", [])
     names = [a["name"] for a in artists]
     assert "Approved Alex" in names

@@ -1,4 +1,8 @@
 from models import db, AdminOffer, Artist
+from datetime import datetime, timezone
+import logging
+
+logger = logging.getLogger(__name__)
 
 class AdminOfferManager:
     """
@@ -64,23 +68,73 @@ class AdminOfferManager:
 
     # --- Admin: Artist-Freigaben ---
     def approve_artist(self, artist_id: int, admin_id: int | None = None):
-        """Setzt den Artist auf 'approved' und speichert Admin/Datum."""
-        artist = Artist.query.get(artist_id)
+        """Setzt den Artist auf 'approved' und speichert Admin/Datum (ohne Model-Methoden)."""
+        artist = db.session.get(Artist, artist_id)  # SQLAlchemy 2.0 Weg
         if not artist:
+            logger.warning("approve_artist: artist not found (id=%r)", artist_id)
             return None
-        # nutzt die Model-Methode aus Artist
-        artist.approve(admin_id=admin_id)
-        self.db.session.commit()
-        return artist
+
+        # idempotent
+        if getattr(artist, "approval_status", None) == "approved":
+            logger.info("approve_artist: already approved (id=%s)", artist_id)
+            return artist
+
+        try:
+            artist.approval_status = "approved"
+            if hasattr(artist, "rejection_reason"):
+                artist.rejection_reason = None
+
+            # approved_by NUR setzen, wenn wir eine int-ID haben
+            if hasattr(artist, "approved_by"):
+                if isinstance(admin_id, int):
+                    artist.approved_by = admin_id
+                else:
+                    # wenn Spalte nullable ist: None; sonst gar nicht setzen
+                    artist.approved_by = None
+
+            if hasattr(artist, "approved_at"):
+                artist.approved_at = datetime.now(timezone.utc)
+
+            db.session.commit()
+            logger.info("Artist approved: id=%s by admin_id=%s", artist_id, admin_id)
+            return artist
+        except Exception as e:
+            logger.exception("approve_artist failed (id=%s): %s", artist_id, e)
+            db.session.rollback()
+            return None
+
+       
 
     def reject_artist(self, artist_id: int, admin_id: int | None = None, reason: str | None = None):
-        """Setzt den Artist auf 'rejected' mit optionaler Begründung und speichert Admin/Datum."""
-        artist = Artist.query.get(artist_id)
+        """Setzt den Artist auf 'rejected' mit optionaler Begründung (ohne Model-Methoden)."""
+        artist = db.session.get(Artist, artist_id)
         if not artist:
+            logger.warning("reject_artist: artist not found (id=%r)", artist_id)
             return None
-        artist.reject(admin_id=admin_id, reason=reason)
-        self.db.session.commit()
-        return artist
+
+        same_reason = (getattr(artist, "rejection_reason", None) or "") == (reason or "")
+        if getattr(artist, "approval_status", None) == "rejected" and same_reason:
+            logger.info("reject_artist: already rejected (id=%s)", artist_id)
+            return artist
+
+        try:
+            artist.approval_status = "rejected"
+            if hasattr(artist, "rejection_reason"):
+                artist.rejection_reason = reason
+
+            # Felder leeren, falls vorhanden
+            if hasattr(artist, "approved_by"):
+                artist.approved_by = None
+            if hasattr(artist, "approved_at"):
+                artist.approved_at = None
+
+            db.session.commit()
+            logger.info("Artist rejected: id=%s by admin_id=%s reason=%r", artist_id, admin_id, reason)
+            return artist
+        except Exception as e:
+            logger.exception("reject_artist failed (id=%s): %s", artist_id, e)
+            db.session.rollback()
+            return None
 
     def serialize_artist(self, artist):
         return {
