@@ -152,14 +152,18 @@ def list_artists_by_status():
             logger.warning(f"[ADMIN] invalid status parameter: {status}")
             return jsonify({'error': 'invalid status'}), 400
 
-        if status == 'pending':
-            artists = artist_mgr.get_pending_artists()
-        elif status == 'approved':
-            artists = artist_mgr.get_approved_artists()
-        elif status == 'rejected':
-            artists = artist_mgr.get_rejected_artists()
-        else:
-            artists = artist_mgr.get_unsubmitted_artists()
+        try:
+            if status == 'pending':
+                artists = artist_mgr.get_pending_artists()
+            elif status == 'approved':
+                artists = artist_mgr.get_approved_artists()
+            elif status == 'rejected':
+                artists = artist_mgr.get_rejected_artists()
+            else:
+                artists = artist_mgr.get_unsubmitted_artists()
+        except Exception:
+            logger.exception(f"[ADMIN] list_artists_by_status query failed for status={status}")
+            artists = []
 
         logger.debug(f"[ADMIN] list_artists_by_status result_count={len(artists)} for status={status}")
 
