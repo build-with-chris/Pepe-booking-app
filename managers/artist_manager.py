@@ -5,6 +5,8 @@ from managers.discipline_manager import DisciplineManager
 from datetime import date, timedelta
 from managers.availability_manager import AvailabilityManager
 from sqlalchemy.exc import IntegrityError
+import logging
+logger = logging.getLogger(__name__)
 
 
 class ArtistManager:
@@ -47,14 +49,15 @@ class ArtistManager:
         """Gibt den Artist mit gegebener E-Mail zurück oder None."""
         return Artist.query.filter_by(email=email).first()
 
-    def create_artist(self, name, email, password, disciplines,
+    def create_artist(self, name, email, password=None, disciplines=None,
                       phone_number=None, address=None,
-                      price_min=1500, price_max=1900, is_admin=False, supabase_user_id=None):
+                      price_min=1500, price_max=1900, is_admin=False, supabase_user_id=None,
+                      approval_status="unsubmitted"):
         """Legt einen neuen Artist mit Standardverfügbarkeit an."""
         try:
             if self.get_artist_by_email(email):
                 raise ValueError('Email already exists')
-
+            disciplines = disciplines or []
             artist = Artist(
                 name=name,
                 email=email,
@@ -64,8 +67,11 @@ class ArtistManager:
                 price_max=price_max,
                 is_admin=is_admin,
                 supabase_user_id=supabase_user_id,
+                approval_status=approval_status,
             )
-            artist.set_password(password)
+            # Passwort ist optional (z. B. Supabase-Login)
+            if password:
+                artist.set_password(password)
             # Disziplinen zuordnen
             for disc_name in disciplines:
                 disc = self.discipline_mgr.get_or_create_discipline(disc_name)
@@ -139,3 +145,35 @@ class ArtistManager:
             self.db.session.commit()
             return True
         return False
+
+    def ensure_artist_exists(self, *, email: str, supabase_user_id: str, name: str | None = None):
+        """Sichert, dass ein Artist existiert: upsert nach E-Mail, UID verknüpfen, falls fehlend.
+        Legt KEINE Jahres-Verfügbarkeit an (soll schlank bleiben für Onboarding/Login).
+        """
+        try:
+            artist = self.get_artist_by_email(email)
+            if artist:
+                updated = False
+                if not getattr(artist, 'supabase_user_id', None) and supabase_user_id:
+                    artist.supabase_user_id = supabase_user_id
+                    updated = True
+                if not getattr(artist, 'approval_status', None):
+                    artist.approval_status = 'unsubmitted'
+                    updated = True
+                if updated:
+                    self.db.session.commit()
+                return artist
+
+            # Neu anlegen – ohne Passwort und ohne 365-Tage-Availability
+            artist = Artist(
+                name=name or (email.split('@')[0] if email else None),
+                email=email,
+                supabase_user_id=supabase_user_id,
+                approval_status='unsubmitted',
+            )
+            self.db.session.add(artist)
+            self.db.session.commit()
+            return artist
+        except Exception:
+            self.db.session.rollback()
+            raise
