@@ -308,9 +308,48 @@ def update_my_profile():
 @swag_from('../resources/swagger/artists_me_ensure_post.yml', validation=False)
 def ensure_my_artist():
     """Ensure an Artist row exists for current Supabase user; return it."""
-    user_id, artist = get_current_user()
+    user_id = get_jwt_identity()
+    artist = None
+    # Try direct lookup by supabase_user_id
+    try:
+        artist = artist_mgr.get_artist_by_supabase_user_id(user_id)
+    except Exception:
+        artist = None
+    # Fallback by email if not found
+    if not artist:
+        try:
+            claims = get_jwt()
+            email = claims.get("email") or claims.get("user_metadata", {}).get("email")
+            name = claims.get("name") or claims.get("user_metadata", {}).get("name")
+            if email:
+                fallback = artist_mgr.get_artist_by_email(email)
+                if fallback:
+                    if not getattr(fallback, "supabase_user_id", None):
+                        fallback.supabase_user_id = user_id
+                        db.session.commit()
+                    artist = fallback
+                else:
+                    # Minimal artist creation (unsubmitted)
+                    from models import Artist
+                    try:
+                        new_artist = Artist(
+                            name=name or (email.split("@")[0] if isinstance(email, str) else None),
+                            email=email,
+                            supabase_user_id=user_id,
+                            approval_status="unsubmitted",
+                        )
+                        db.session.add(new_artist)
+                        db.session.commit()
+                        artist = new_artist
+                    except Exception:
+                        db.session.rollback()
+                        artist = None
+        except Exception:
+            artist = None
+    # If still no artist, return error
     if not artist:
         return jsonify({'error': 'Unable to ensure artist for current user'}), 500
+    # Always return the artist record (existing or newly created)
     return jsonify({
         'id': artist.id,
         'name': artist.name,
