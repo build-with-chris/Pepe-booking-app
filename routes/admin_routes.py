@@ -178,7 +178,7 @@ def list_artists_by_status():
                 'approved_by': getattr(a, 'approved_by', None),
                 'profile_image_url': getattr(a, 'profile_image_url', None),
                 'gallery_urls': getattr(a, 'gallery_urls', []),
-                'disciplines': getattr(a, 'disciplines', []),
+                'disciplines': [d.name for d in getattr(a, 'disciplines', [])] if getattr(a, 'disciplines', None) else [],
                 'bio': getattr(a, 'bio', None),
             }
 
