@@ -159,3 +159,31 @@ class AdminOffer(db.Model):
         'Artist',
         backref=db.backref('admin_offers', cascade='all, delete-orphan')
     )
+
+
+# Invoice model: Speicherung von Rechnungen eines Artists (nur Metadaten und Storage-Verweis)
+class Invoice(db.Model):
+    """Rechnung eines Artists (Datei liegt in Supabase Storage; hier wird nur der Verweis & Metadaten gespeichert)."""
+    __tablename__ = 'invoices'
+    __table_args__ = (
+        db.UniqueConstraint('artist_id', 'storage_path', name='uq_invoice_artist_path'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    artist_id = db.Column(db.Integer, db.ForeignKey('artists.id'), nullable=False, index=True)
+    storage_path = db.Column(db.String(1024), nullable=False)  # z.B. user/<uid>/<filename>.pdf
+
+    status = db.Column(db.String(20), nullable=False, server_default='uploaded')  # uploaded|verified|paid|rejected
+    amount_cents = db.Column(db.Integer, nullable=True)
+    currency = db.Column(db.String(8), nullable=False, server_default='EUR')
+    invoice_date = db.Column(db.Date, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Beziehung zurück zum Artist; erzeugt artist.invoices via backref
+    artist = db.relationship(
+        'Artist',
+        backref=db.backref('invoices', cascade='all, delete-orphan')
+    )
