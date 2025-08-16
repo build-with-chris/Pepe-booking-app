@@ -230,8 +230,12 @@ def admin_invoice_signed_url(invoice_id: int):
         if isinstance(signed_path, str) and (signed_path.startswith('http://') or signed_path.startswith('https://')):
             signed_full = signed_path
         else:
-            signed_full = urljoin(supa_url.rstrip('/') + '/', str(signed_path).lstrip('/'))
-
+            sp = str(signed_path)
+            # Supabase returns `/object/sign/...` but the public base requires `/storage/v1` prefix
+            if sp.startswith('/object/'):
+                sp = '/storage/v1' + sp
+            signed_full = urljoin(supa_url.rstrip('/') + '/', sp.lstrip('/'))
+        logger.debug('[ADMIN] signed invoice URL resolved: %s', signed_full)
         return jsonify({'url': signed_full}), 200
     except Exception as e:
         logger.exception('[ADMIN] sign url exception: %s', e)
