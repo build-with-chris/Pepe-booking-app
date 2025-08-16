@@ -35,42 +35,6 @@ except Exception:
     HAS_INVOICE_MODEL = False
 
 
-def _require_admin_or_403():
-    """Checks admin permission via JWT role, email allowlist, or Artist.is_admin fallback."""
-    claims = get_jwt() or {}
-
-    # 1) Role claim in multiple places (common with Supabase)
-    role = (
-        claims.get('role')
-        or (claims.get('app_metadata') or {}).get('role')
-        or (claims.get('user_metadata') or {}).get('role')
-    )
-
-    # 2) Optional email allowlist from env (comma-separated)
-    email = (
-        claims.get('email')
-        or claims.get('preferred_username')
-        or claims.get('user_email')
-        or (claims.get('app_metadata') or {}).get('email')
-    )
-    admin_allow = [e.strip().lower() for e in (os.getenv('ADMIN_EMAILS') or '').split(',') if e.strip()]
-
-    is_admin_role = (str(role).lower() == 'admin') if role else False
-    is_admin_allow = (email and email.lower() in admin_allow)
-
-    if is_admin_role or is_admin_allow:
-        return None
-
-    # 3) Fallback: resolve current user and check Artist.is_admin
-    try:
-        _uid, artist = get_current_user()
-        if artist and getattr(artist, 'is_admin', False):
-            return None
-    except Exception as e:
-        logger.warning('[ADMIN GUARD] get_current_user fallback failed: %s', e)
-
-    logger.warning('[ADMIN GUARD] Forbidden. role=%r email=%r allowlist=%r claims_keys=%r', role, email, admin_allow, list(claims.keys()))
-    return jsonify({'error': 'Not allowed'}), 403
 # -------------------------------------------------------------
 # Admin: Invoices – Liste & Patch (Status ändern)
 # -------------------------------------------------------------
@@ -79,9 +43,14 @@ def _require_admin_or_403():
 @swag_from('../resources/swagger/admin_invoices_get.yml', validation=False)
 def admin_list_invoices():
     """Listet alle Rechnungen mit Artist-Infos (nur Admins)."""
-    err = _require_admin_or_403()
-    if err:
-        return err
+    claims = get_jwt()
+    app_md = claims.get('app_metadata') or {}
+    is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
+    if not is_admin:
+        user_id, artist = get_current_user()
+        is_admin = bool(artist and getattr(artist, 'is_admin', False))
+    if not is_admin:
+        return jsonify({'error': 'Not allowed'}), 403
 
     if not HAS_INVOICE_MODEL:
         # Kein Invoice-Model vorhanden -> leere Liste zurückgeben
@@ -116,9 +85,14 @@ def admin_list_invoices():
 @swag_from('../resources/swagger/admin_invoices_patch.yml', validation=False)
 def admin_patch_invoice(invoice_id: int):
     """Aktualisiert Felder einer Rechnung (nur Admins)."""
-    err = _require_admin_or_403()
-    if err:
-        return err
+    claims = get_jwt()
+    app_md = claims.get('app_metadata') or {}
+    is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
+    if not is_admin:
+        user_id, artist = get_current_user()
+        is_admin = bool(artist and getattr(artist, 'is_admin', False))
+    if not is_admin:
+        return jsonify({'error': 'Not allowed'}), 403
 
     if not HAS_INVOICE_MODEL:
         return jsonify({'error': 'Invoice model not available'}), 400
