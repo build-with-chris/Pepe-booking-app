@@ -10,6 +10,9 @@ from models import Artist
 from app import db
 import os
 import logging
+import requests
+from urllib.parse import urljoin
+
 logger = logging.getLogger(__name__)
 
 """
@@ -123,6 +126,71 @@ def admin_patch_invoice(invoice_id: int):
         db.session.rollback()
         return jsonify({'error': 'internal error'}), 500
 
+
+@admin_bp.route('/invoices/<int:invoice_id>/url', methods=['GET'])
+@jwt_required()
+@swag_from('../resources/swagger/admin_invoices_url_get.yml', validation=False)
+def admin_invoice_signed_url(invoice_id: int):
+    """Erzeugt eine kurzlebige signierte URL (30 Min) für eine private Invoice-Datei im Supabase Storage.
+    Benötigt SUPABASE_URL, SUPABASE_SERVICE_ROLE und optional INVOICE_BUCKET (default: 'invoices').
+    """
+    # Inline-Admin-Check wie in anderen Admin-Routen
+    claims = get_jwt()
+    app_md = claims.get('app_metadata') or {}
+    is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
+    if not is_admin:
+        _uid, artist = get_current_user()
+        is_admin = bool(artist and getattr(artist, 'is_admin', False))
+    if not is_admin:
+        return jsonify({'error': 'Not allowed'}), 403
+
+    if not HAS_INVOICE_MODEL:
+        return jsonify({'error': 'Invoice model not available'}), 400
+
+    inv = Invoice.query.get(invoice_id)
+    if not inv:
+        return jsonify({'error': 'not found'}), 404
+
+    supa_url = os.getenv('SUPABASE_URL')
+    service_key = os.getenv('SUPABASE_SERVICE_ROLE') or os.getenv('SUPABASE_SERVICE_KEY')
+    bucket = os.getenv('INVOICE_BUCKET', 'invoices')
+    if not supa_url or not service_key:
+        return jsonify({'error': 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE env'}), 500
+
+    # POST /storage/v1/object/sign/<bucket>/<path>  body: {"expiresIn": 1800}
+    sign_endpoint = f"/storage/v1/object/sign/{bucket}/{inv.storage_path}"
+    url = urljoin(supa_url.rstrip('/') + '/', sign_endpoint.lstrip('/'))
+    try:
+        resp = requests.post(
+            url,
+            json={"expiresIn": 1800},
+            headers={
+                'Authorization': f'Bearer {service_key}',
+                'apikey': service_key,
+                'Content-Type': 'application/json',
+            },
+            timeout=15
+        )
+        if resp.status_code != 200:
+            logger.error('[ADMIN] sign url failed: %s %s', resp.status_code, resp.text[:300])
+            return jsonify({'error': 'sign failed', 'status': resp.status_code}), 502
+
+        data = resp.json()
+        signed_path = data.get('signedURL') or data.get('signedUrl') or data.get('url') or None
+        if signed_path:
+            signed_full = urljoin(supa_url.rstrip('/') + '/', signed_path.lstrip('/'))
+        else:
+            # Fallback – falls die API direkt eine absolute URL liefert
+            if isinstance(data, str) and data.startswith('http'):
+                signed_full = data
+            else:
+                return jsonify({'error': 'sign response invalid'}), 502
+
+        return jsonify({'url': signed_full}), 200
+    except Exception as e:
+        logger.exception('[ADMIN] sign url exception: %s', e)
+        return jsonify({'error': 'internal error'}), 500
+    
 
 
 # Admin rights
