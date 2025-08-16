@@ -8,6 +8,7 @@ from managers.artist_manager import ArtistManager
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from models import Artist
 from app import db
+import os
 import logging
 logger = logging.getLogger(__name__)
 
@@ -35,11 +36,41 @@ except Exception:
 
 
 def _require_admin_or_403():
+    """Checks admin permission via JWT role, email allowlist, or Artist.is_admin fallback."""
     claims = get_jwt() or {}
-    role = claims.get('role') or (claims.get('app_metadata') or {}).get('role')
-    if role != 'admin':
-        return jsonify({'error': 'Not allowed'}), 403
-    return None
+
+    # 1) Role claim in multiple places (common with Supabase)
+    role = (
+        claims.get('role')
+        or (claims.get('app_metadata') or {}).get('role')
+        or (claims.get('user_metadata') or {}).get('role')
+    )
+
+    # 2) Optional email allowlist from env (comma-separated)
+    email = (
+        claims.get('email')
+        or claims.get('preferred_username')
+        or claims.get('user_email')
+        or (claims.get('app_metadata') or {}).get('email')
+    )
+    admin_allow = [e.strip().lower() for e in (os.getenv('ADMIN_EMAILS') or '').split(',') if e.strip()]
+
+    is_admin_role = (str(role).lower() == 'admin') if role else False
+    is_admin_allow = (email and email.lower() in admin_allow)
+
+    if is_admin_role or is_admin_allow:
+        return None
+
+    # 3) Fallback: resolve current user and check Artist.is_admin
+    try:
+        _uid, artist = get_current_user()
+        if artist and getattr(artist, 'is_admin', False):
+            return None
+    except Exception as e:
+        logger.warning('[ADMIN GUARD] get_current_user fallback failed: %s', e)
+
+    logger.warning('[ADMIN GUARD] Forbidden. role=%r email=%r allowlist=%r claims_keys=%r', role, email, admin_allow, list(claims.keys()))
+    return jsonify({'error': 'Not allowed'}), 403
 # -------------------------------------------------------------
 # Admin: Invoices – Liste & Patch (Status ändern)
 # -------------------------------------------------------------
