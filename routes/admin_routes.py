@@ -154,11 +154,51 @@ def admin_invoice_signed_url(invoice_id: int):
     supa_url = os.getenv('SUPABASE_URL')
     service_key = os.getenv('SUPABASE_SERVICE_ROLE') or os.getenv('SUPABASE_SERVICE_KEY')
     bucket = os.getenv('INVOICE_BUCKET', 'invoices')
-    if not supa_url or not service_key:
-        return jsonify({'error': 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE env'}), 500
+    missing = []
+    if not supa_url:
+        missing.append('SUPABASE_URL')
+    if not service_key:
+        missing.append('SUPABASE_SERVICE_ROLE')
+    if missing:
+        logger.error('[ADMIN] missing env for sign url: %s', ','.join(missing))
+        return jsonify({'error': 'Missing env', 'missing': missing}), 500
 
-    # POST /storage/v1/object/sign/<bucket>/<path>  body: {"expiresIn": 1800}
-    sign_endpoint = f"/storage/v1/object/sign/{bucket}/{inv.storage_path}"
+    # --- Normalize storage path -------------------------------------------------
+    raw_path = (inv.storage_path or '').strip()
+
+    # If a full URL was stored, try to extract the relative object path
+    if raw_path.startswith('http://') or raw_path.startswith('https://'):
+        try:
+            from urllib.parse import urlparse
+            p = urlparse(raw_path)
+            # Expected: /storage/v1/object/<bucket>/<objectPath> or /storage/v1/object/sign/<bucket>/<objectPath>
+            parts = p.path.split('/storage/v1/object', 1)
+            if len(parts) == 2:
+                suffix = parts[1]
+                # Strip optional prefixes like /sign or /download
+                for prefix in ('/sign', '/download', ''):
+                    if suffix.startswith(prefix + '/'):
+                        suffix = suffix[len(prefix)+1:]
+                        break
+                if '/' in suffix:
+                    maybe_bucket, rest = suffix.split('/', 1)
+                    if maybe_bucket:
+                        bucket = maybe_bucket  # trust URL bucket
+                        raw_path = rest
+        except Exception:
+            pass
+
+    # Ensure no leading slash and bucket prefix isn't duplicated
+    object_path = raw_path.lstrip('/')
+    if object_path.startswith(bucket + '/'):
+        object_path = object_path[len(bucket)+1:]
+
+    # basic sanity
+    if not object_path or '..' in object_path:
+        return jsonify({'error': 'requested path is invalid'}), 400
+
+    # Build Storage sign endpoint: /storage/v1/object/sign/<bucket>/<object_path>
+    sign_endpoint = f"/storage/v1/object/sign/{bucket}/{object_path}"
     url = urljoin(supa_url.rstrip('/') + '/', sign_endpoint.lstrip('/'))
     try:
         resp = requests.post(
@@ -176,15 +216,21 @@ def admin_invoice_signed_url(invoice_id: int):
             return jsonify({'error': 'sign failed', 'status': resp.status_code}), 502
 
         data = resp.json()
-        signed_path = data.get('signedURL') or data.get('signedUrl') or data.get('url') or None
-        if signed_path:
-            signed_full = urljoin(supa_url.rstrip('/') + '/', signed_path.lstrip('/'))
+        signed_path = None
+        if isinstance(data, dict):
+            signed_path = data.get('signedURL') or data.get('signedUrl') or data.get('url')
+        elif isinstance(data, str) and data.startswith('http'):
+            return jsonify({'url': data}), 200
+
+        if not signed_path:
+            logger.error('[ADMIN] sign url unexpected payload: %r', data)
+            return jsonify({'error': 'sign response invalid'}), 502
+
+        # If response is already absolute, return as is
+        if isinstance(signed_path, str) and (signed_path.startswith('http://') or signed_path.startswith('https://')):
+            signed_full = signed_path
         else:
-            # Fallback – falls die API direkt eine absolute URL liefert
-            if isinstance(data, str) and data.startswith('http'):
-                signed_full = data
-            else:
-                return jsonify({'error': 'sign response invalid'}), 502
+            signed_full = urljoin(supa_url.rstrip('/') + '/', str(signed_path).lstrip('/'))
 
         return jsonify({'url': signed_full}), 200
     except Exception as e:
