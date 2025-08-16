@@ -8,7 +8,24 @@ from managers.artist_manager import ArtistManager
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from models import Artist
 from app import db
- 
+import logging
+logger = logging.getLogger(__name__)
+
+"""
+Admin-Modul: Enthält alle Endpunkte zum Verwalten von Buchungsanfragen,
+Admin-Angeboten und Dashboard-Daten. Nur für Admin-User zugänglich.
+"""
+
+# Blueprint für alle Admin-Routen mit URL-Prefix /admin
+admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+
+# Manager-Instanzen
+request_mgr = BookingRequestManager()
+offer_mgr = AdminOfferManager()
+avail_mgr = AvailabilityManager()
+artist_mgr = ArtistManager()
+
+
 # Optional Invoice model (soft support)
 try:
     from models import Invoice
@@ -100,22 +117,8 @@ def admin_patch_invoice(invoice_id: int):
         logger.exception('[ADMIN] patch invoice failed: %s', e)
         db.session.rollback()
         return jsonify({'error': 'internal error'}), 500
-import logging
-logger = logging.getLogger(__name__)
 
-"""
-Admin-Modul: Enthält alle Endpunkte zum Verwalten von Buchungsanfragen,
-Admin-Angeboten und Dashboard-Daten. Nur für Admin-User zugänglich.
-"""
 
-# Blueprint für alle Admin-Routen mit URL-Prefix /admin
-admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
-
-# Manager-Instanzen
-request_mgr = BookingRequestManager()
-offer_mgr = AdminOfferManager()
-avail_mgr = AvailabilityManager()
-artist_mgr = ArtistManager()
 
 # Admin rights
 @admin_bp.route('/requests/all', methods=['GET'])
