@@ -7,6 +7,99 @@ from managers.availability_manager import AvailabilityManager
 from managers.artist_manager import ArtistManager
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from models import Artist
+from app import db
+ 
+# Optional Invoice model (soft support)
+try:
+    from models import Invoice
+    HAS_INVOICE_MODEL = True
+except Exception:
+    HAS_INVOICE_MODEL = False
+
+
+def _require_admin_or_403():
+    claims = get_jwt() or {}
+    role = claims.get('role') or (claims.get('app_metadata') or {}).get('role')
+    if role != 'admin':
+        return jsonify({'error': 'Not allowed'}), 403
+    return None
+# -------------------------------------------------------------
+# Admin: Invoices – Liste & Patch (Status ändern)
+# -------------------------------------------------------------
+@admin_bp.route('/invoices', methods=['GET'])
+@jwt_required()
+@swag_from('../resources/swagger/admin_invoices_get.yml', validation=False)
+def admin_list_invoices():
+    """Listet alle Rechnungen mit Artist-Infos (nur Admins)."""
+    err = _require_admin_or_403()
+    if err:
+        return err
+
+    if not HAS_INVOICE_MODEL:
+        # Kein Invoice-Model vorhanden -> leere Liste zurückgeben
+        return jsonify([]), 200
+
+    try:
+        q = db.session.query(Invoice, Artist).join(Artist, Invoice.artist_id == Artist.id)
+        rows = q.order_by(Invoice.created_at.desc()).all()
+        out = []
+        for inv, artist in rows:
+            out.append({
+                'id': inv.id,
+                'artist_id': inv.artist_id,
+                'artist_name': getattr(artist, 'name', None),
+                'artist_email': getattr(artist, 'email', None),
+                'storage_path': inv.storage_path,
+                'status': getattr(inv, 'status', None),
+                'amount_cents': getattr(inv, 'amount_cents', None),
+                'currency': getattr(inv, 'currency', 'EUR'),
+                'invoice_date': inv.invoice_date.isoformat() if getattr(inv, 'invoice_date', None) else None,
+                'created_at': inv.created_at.isoformat() if getattr(inv, 'created_at', None) else None,
+                'updated_at': inv.updated_at.isoformat() if getattr(inv, 'updated_at', None) else None,
+            })
+        return jsonify(out), 200
+    except Exception as e:
+        logger.exception('[ADMIN] list invoices failed: %s', e)
+        return jsonify({'error': 'internal error'}), 500
+
+
+@admin_bp.route('/invoices/<int:invoice_id>', methods=['PATCH'])
+@jwt_required()
+@swag_from('../resources/swagger/admin_invoices_patch.yml', validation=False)
+def admin_patch_invoice(invoice_id: int):
+    """Aktualisiert Felder einer Rechnung (nur Admins)."""
+    err = _require_admin_or_403()
+    if err:
+        return err
+
+    if not HAS_INVOICE_MODEL:
+        return jsonify({'error': 'Invoice model not available'}), 400
+
+    data = request.get_json(silent=True) or {}
+    try:
+        inv = Invoice.query.get(invoice_id)
+        if not inv:
+            return jsonify({'error': 'not found'}), 404
+
+        # erlaubte Felder patchen
+        if 'status' in data:
+            inv.status = str(data['status'])
+        if 'amount_cents' in data and data['amount_cents'] is not None:
+            inv.amount_cents = int(data['amount_cents'])
+        if 'currency' in data and data['currency']:
+            inv.currency = str(data['currency']).upper()
+        if 'invoice_date' in data and data['invoice_date']:
+            from datetime import date
+            inv.invoice_date = date.fromisoformat(str(data['invoice_date']))
+        if 'notes' in data:
+            inv.notes = str(data['notes']) if data['notes'] is not None else None
+
+        db.session.commit()
+        return jsonify({'ok': True}), 200
+    except Exception as e:
+        logger.exception('[ADMIN] patch invoice failed: %s', e)
+        db.session.rollback()
+        return jsonify({'error': 'internal error'}), 500
 import logging
 logger = logging.getLogger(__name__)
 
