@@ -9,6 +9,8 @@ from managers.booking_requests_manager import BookingRequestManager
 from models import Availability, Discipline, db
 import logging
 
+from datetime import datetime
+
 logger = logging.getLogger(__name__)
 
 # Manager-Instanzen
@@ -685,3 +687,119 @@ def artist_offer(req_id):
     if offer_data is None:
         return jsonify({'error': 'Offer not found or not permitted'}), 404
     return jsonify(offer_data), 200
+
+
+# =============================
+# Invoices (Option A – UID-Folder in Supabase)
+# =============================
+try:
+    from models import Invoice  # optional: only if model exists
+    HAS_INVOICE_MODEL = True
+except Exception:
+    HAS_INVOICE_MODEL = False
+
+
+@api_bp.route('/invoices', methods=['POST'])
+@jwt_required()
+@swag_from('../resources/swagger/invoices_post.yml', validation=False)
+def create_invoice_entry():
+    """Registriert eine Rechnung zu einem Artist. Erwartet mindestens `storage_path` (z. B. `user/<uid>/<file>`).
+    Hinweis: Die Datei selbst liegt in Supabase Storage (Bucket `invoices`).
+    Wenn das `Invoice`-Model nicht vorhanden ist, wird ein No-Op mit 200 zurückgegeben (soft rollout).
+    """
+    user_id, artist = get_current_user()
+    if not artist:
+        return jsonify({'error': 'Current user not linked to an artist'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    storage_path = (payload.get('storage_path') or '').strip()
+    amount_cents = payload.get('amount_cents')
+    currency = (payload.get('currency') or 'EUR').upper()
+    invoice_date_raw = payload.get('invoice_date')  # ISO (YYYY-MM-DD) optional
+    notes = payload.get('notes')
+
+    if not storage_path:
+        return jsonify({'error': 'storage_path is required'}), 400
+
+    # parse date if provided
+    invoice_date = None
+    if isinstance(invoice_date_raw, str) and invoice_date_raw.strip():
+        try:
+            invoice_date = datetime.fromisoformat(invoice_date_raw).date()
+        except Exception:
+            return jsonify({'error': 'invoice_date must be ISO date (YYYY-MM-DD)'}), 400
+
+    if not HAS_INVOICE_MODEL:
+        # Soft success so Frontend-Uploadflow funktioniert auch ohne DB-Tracking
+        return jsonify({
+            'ok': True,
+            'note': 'Invoice model not installed; stored only in Supabase Storage',
+            'artist_id': artist.id,
+            'storage_path': storage_path,
+        }), 200
+
+    try:
+        # De-dupe by (artist_id, storage_path)
+        existing = Invoice.query.filter_by(artist_id=artist.id, storage_path=storage_path).first()
+        if existing:
+            # update optional fields
+            if amount_cents is not None:
+                existing.amount_cents = int(amount_cents)
+            if currency:
+                existing.currency = currency
+            if invoice_date is not None:
+                existing.invoice_date = invoice_date
+            if notes is not None:
+                existing.notes = notes
+            db.session.commit()
+            return jsonify({'id': existing.id, 'artist_id': artist.id, 'storage_path': storage_path}), 200
+
+        inv = Invoice(
+            artist_id=artist.id,
+            storage_path=storage_path,
+            amount_cents=(int(amount_cents) if amount_cents is not None else None),
+            currency=currency,
+            invoice_date=invoice_date,
+            notes=notes,
+        )
+        db.session.add(inv)
+        db.session.commit()
+        return jsonify({'id': inv.id, 'artist_id': artist.id, 'storage_path': inv.storage_path}), 201
+    except Exception as e:
+        logger.exception('Failed to create/update invoice entry')
+        db.session.rollback()
+        return jsonify({'error': 'Failed to create invoice', 'details': str(e)}), 500
+
+
+@api_bp.route('/invoices', methods=['GET'])
+@jwt_required()
+@swag_from('../resources/swagger/invoices_get.yml', validation=False)
+def list_invoices():
+    """Listet die registrierten Rechnungen des eingeloggten Artists (nur, wenn `Invoice`-Model vorhanden ist).
+    Ohne Model gibt es 204 (No Content), da die Dateien direkt in Supabase gelistet werden.
+    """
+    user_id, artist = get_current_user()
+    if not artist:
+        return jsonify({'error': 'Current user not linked to an artist'}), 403
+
+    if not HAS_INVOICE_MODEL:
+        return ('', 204)
+
+    try:
+        rows = Invoice.query.filter_by(artist_id=artist.id).order_by(Invoice.created_at.desc()).all()
+        return jsonify([
+            {
+                'id': r.id,
+                'storage_path': r.storage_path,
+                'status': getattr(r, 'status', None),
+                'amount_cents': getattr(r, 'amount_cents', None),
+                'currency': getattr(r, 'currency', 'EUR'),
+                'invoice_date': (r.invoice_date.isoformat() if getattr(r, 'invoice_date', None) else None),
+                'created_at': (r.created_at.isoformat() if getattr(r, 'created_at', None) else None),
+                'updated_at': (r.updated_at.isoformat() if getattr(r, 'updated_at', None) else None),
+            }
+            for r in rows
+        ]), 200
+    except Exception as e:
+        logger.exception('Failed to list invoices')
+        return jsonify({'error': 'Failed to list invoices', 'details': str(e)}), 500
