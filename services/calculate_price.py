@@ -5,20 +5,21 @@ def calculate_price(base_min, base_max,
                     event_type='Private Feier', num_guests=0,
                     is_weekend=False, is_indoor=True,
                     needs_light=False, needs_sound=False,
-                    show_discipline='stage_show', team_size='solo',
+                    team_size='solo',
                     duration=0, event_address=None):
     """
     Berechnet eine Preisspanne (Min, Max) durch Anwendung folgender Schritte in dieser Reihenfolge:
 
-    1. Event-Typ-Multiplikator (z. B. Firmenfeier ×1.3, Privat ×0.7, …)
+    1. Event-Typ-Multiplikator ('Private Feier': 0.6,'Firmenfeier': 1.5, 'Teamevent': 1.05, Streetshow': 0.7)
     2. Gästezahl-Multiplikator (≤200 ×1.0, 201–500 ×1.2, >500 ×1.35)
-    3. Wochenend- oder Wochentag-Modifikator
-    4. Newsletter-Rabatt
-    5. Indoor- vs. Outdoor-Faktor 
-    6. Technikpauschalen (Licht, Sound)
-    7. Basis-Agenturgebühr (fee_pct)
-    8. Distanzzuschläge (ab 300 km +200 €, ab 600 km +300 €, München –100 €)
-    9. Fahrkosten
+    3. Wochenend- oder Wochentag-Modifikator (1.2)
+    4. Newsletter-Rabatt (5%)
+    5. Indoor- vs. Outdoor-Faktor (1.2) 
+    6. Dauer-Multiplikator basierend auf der Performance-Dauer
+    7. Technikpauschalen (Licht, Sound) jeweils 450€
+    8. Basis-Agenturgebühr (20 fee_pct)
+    9. Distanzzuschläge (ab 300 km +200 €, ab 600 km +300 €, München –100 €)
+    10. Fahrkosten (0,5€/ km)
     """
     # 1. Event type
     event_weights = {
@@ -69,16 +70,38 @@ def calculate_price(base_min, base_max,
         min_p *= 1.2
         max_p *= 1.2
 
-    # 6. Tech fees
+    # 6. Duration multiplier based on performance duration
+    # Round up duration to nearest 5 minutes
+    rounded_duration = ((duration + 4) // 5) * 5  # duration in minutes rounded up to nearest 5
+    if rounded_duration <= 5:
+        duration_factor = 1.0
+    else:
+        # Base factors for 10 and 15 minutes
+        if rounded_duration == 10:
+            duration_factor = 1.4
+        elif rounded_duration == 15:
+            duration_factor = 1.6
+        elif rounded_duration > 15:
+            # For each additional 5 minutes above 15, add 0.1
+            extra_intervals = (rounded_duration - 15) // 5
+            duration_factor = 1.6 + (extra_intervals * 0.1)
+        else:
+            # For durations between 6 and 9 (rounded to 10), fallback to 1.4
+            duration_factor = 1.4
+
+    min_p *= duration_factor
+    max_p *= duration_factor
+
+    # 7. Tech fees
     tech_fee = 0
     if needs_light: tech_fee += 450
     if needs_sound: tech_fee += 450
 
-    # 7. Agency fee
+    # 8. Agency fee
     min_p *= (1 + fee_pct/100)
     max_p *= (1 + fee_pct/100)
 
-    # 8. Distance surcharges
+    # 9. Distance surcharges
     surcharge = 0
     city = None
     if event_address:
@@ -94,7 +117,7 @@ def calculate_price(base_min, base_max,
     if city in ['münchen', 'muenchen', 'munich']:
         surcharge -= 100
 
-    # 9. Travel fee
+    # 10. Travel fee
     rate_per_km = float(os.getenv("RATE_PER_KM", 0.5))
     travel_fee  = distance_km * rate_per_km
 

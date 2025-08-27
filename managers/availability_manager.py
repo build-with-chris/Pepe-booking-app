@@ -1,6 +1,6 @@
 import logging
 from models import db, Availability, Artist
-from datetime import date as _date
+from datetime import timedelta, date as _date
 from sqlalchemy.exc import IntegrityError
 
 logger = logging.getLogger(__name__)
@@ -148,3 +148,34 @@ class AvailabilityManager:
         except Exception:
             logger.exception('Fehler beim Ersetzen der Availabilities für supabase_user_id=%s', supabase_user_id)
             return {'added': [], 'removed': []}
+
+
+
+    def ensure_auto_availability_for_all(self, days_ahead=365):
+        """
+        Stellt sicher, dass jeder Artist einen Verfügbarkeits-Slot für heute+days_ahead hat.
+        Legt fehlende Slots an und gibt eine Übersicht zurück.
+        """
+        today = _date.today()
+        target_date = today + timedelta(days=days_ahead)
+
+        results = {"added": [], "skipped": []}
+        try:
+            artists = Artist.query.all()
+            for artist in artists:
+                existing = Availability.query.filter_by(
+                    artist_id=artist.id, date=target_date
+                ).first()
+                if existing:
+                    results["skipped"].append(artist.id)
+                else:
+                    slot = Availability(artist_id=artist.id, date=target_date)
+                    self.db.session.add(slot)
+                    results["added"].append(artist.id)
+            self.db.session.commit()
+        except Exception as e:
+            self.db.session.rollback()
+            logger.exception("Fehler bei ensure_auto_availability_for_all")
+            raise
+
+        return results
