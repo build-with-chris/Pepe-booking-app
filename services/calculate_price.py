@@ -2,7 +2,7 @@ import os
 
 def calculate_price(base_min, base_max,
                     distance_km, fee_pct, newsletter=False,
-                    event_type='Private Feier', num_guests=0,
+                    event_type='Private Feier', num_guests=0, show_discipline=False,
                     is_weekend=False, is_indoor=True,
                     needs_light=False, needs_sound=False,
                     team_size='solo',
