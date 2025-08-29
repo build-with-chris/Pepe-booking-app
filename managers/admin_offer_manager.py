@@ -1,6 +1,7 @@
 from models import db, AdminOffer, Artist
 from datetime import datetime, timezone
 import logging
+from managers.availability_manager import AvailabilityManager
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,14 @@ class AdminOfferManager:
 
             db.session.commit()
             logger.info("Artist approved: id=%s by admin_id=%s", artist_id, admin_id)
+
+            # Nach Freigabe: 365 Tage Verfügbarkeit idempotent auffüllen
+            try:
+                AvailabilityManager().ensure_auto_availability_for_artist(artist_id, days_ahead=365)
+            except Exception as e:
+                # Approval nicht zurückrollen – nur loggen
+                logger.exception("Auto-availability fill failed for artist_id=%s: %s", artist_id, e)
+
             return artist
         except Exception as e:
             logger.exception("approve_artist failed (id=%s): %s", artist_id, e)

@@ -5,6 +5,13 @@ from sqlalchemy.exc import IntegrityError
 
 logger = logging.getLogger(__name__)
 
+# helper: inclusive date range generator
+def _date_range_inclusive(start: _date, end: _date):
+    cur = start
+    while cur <= end:
+        yield cur
+        cur = cur + timedelta(days=1)
+
 class AvailabilityManager:
     """
     Verwaltet Verfügbarkeitstage von Artists.
@@ -149,33 +156,112 @@ class AvailabilityManager:
             logger.exception('Fehler beim Ersetzen der Availabilities für supabase_user_id=%s', supabase_user_id)
             return {'added': [], 'removed': []}
 
-
-
-    def ensure_auto_availability_for_all(self, days_ahead=365):
+    def ensure_available_for_all_on(self, target, only_approved: bool = True):
         """
-        Stellt sicher, dass jeder Artist einen Verfügbarkeits-Slot für heute+days_ahead hat.
-        Legt fehlende Slots an und gibt eine Übersicht zurück.
+        Legt für alle (oder nur freigegebene) Artists einen Verfügbarkeits-Slot am gegebenen Datum an.
+        `target` akzeptiert date-Objekt oder ISO-String. Idempotent – bestehende Einträge werden übersprungen.
+        Rückgabe: {"created": n, "skipped": m}
         """
-        today = _date.today()
-        target_date = today + timedelta(days=days_ahead)
-
-        results = {"added": [], "skipped": []}
+        if isinstance(target, str):
+            try:
+                target = _date.fromisoformat(target)
+            except ValueError:
+                logger.warning('Ungültiges Datum in ensure_available_for_all_on: %s', target)
+                raise
+        created = 0
+        skipped = 0
         try:
-            artists = Artist.query.all()
-            for artist in artists:
-                existing = Availability.query.filter_by(
-                    artist_id=artist.id, date=target_date
-                ).first()
-                if existing:
-                    results["skipped"].append(artist.id)
-                else:
-                    slot = Availability(artist_id=artist.id, date=target_date)
-                    self.db.session.add(slot)
-                    results["added"].append(artist.id)
-            self.db.session.commit()
-        except Exception as e:
+            q = Artist.query
+            # Falls es ein approval_status-Feld gibt, optional darauf filtern
+            try:
+                if only_approved and hasattr(Artist, 'approval_status'):
+                    q = q.filter(Artist.approval_status == 'approved')
+            except Exception:
+                # falls Schema anders ist, kein Filter – wir fahren fort
+                pass
+            artists = q.all()
+
+            # Existierende Slots an diesem Tag für alle Artists abfragen, um N+1 zu vermeiden
+            existing = (
+                Availability.query
+                .filter(Availability.date == target)
+                .with_entities(Availability.artist_id)
+                .all()
+            )
+            existing_ids = {row[0] for row in existing}
+
+            to_create = [
+                Availability(artist_id=artist.id, date=target)
+                for artist in artists
+                if artist.id not in existing_ids
+            ]
+
+            if to_create:
+                self.db.session.bulk_save_objects(to_create)
+                self.db.session.commit()
+                created = len(to_create)
+            else:
+                created = 0
+            skipped = len(artists) - created
+            return {"created": created, "skipped": skipped, "date": target.isoformat()}
+        except Exception:
             self.db.session.rollback()
-            logger.exception("Fehler bei ensure_auto_availability_for_all")
+            logger.exception('Fehler in ensure_available_for_all_on für Datum %s', target)
             raise
 
-        return results
+    def ensure_today_available_for_all(self, only_approved: bool = True):
+        """Cron-Helfer: setzt den heutigen Tag für alle (oder nur freigegebene) Artists auf verfügbar."""
+        return self.ensure_available_for_all_on(_date.today(), only_approved=only_approved)
+
+    def ensure_availability_range_for_artist(self, artist_id: int, start, end) -> dict:
+        """
+        Legt fehlende Verfügbarkeiten für einen Artist für den (inklusiven) Zeitraum an.
+        `start`/`end` akzeptieren date-Objekte oder ISO-Strings. Idempotent.
+        Rückgabe: {"added": int, "skipped": int}
+        """
+        # Normalisieren
+        if isinstance(start, str):
+            start = _date.fromisoformat(start)
+        if isinstance(end, str):
+            end = _date.fromisoformat(end)
+        if end < start:
+            start, end = end, start
+        try:
+            # existierende Slots im Bereich laden (nur Datum)
+            existing = (
+                Availability.query
+                .filter(Availability.artist_id == artist_id)
+                .filter(Availability.date >= start, Availability.date <= end)
+                .with_entities(Availability.date)
+                .all()
+            )
+            existing_dates = {row[0] for row in existing}
+
+            to_create = [
+                Availability(artist_id=artist_id, date=dt)
+                for dt in _date_range_inclusive(start, end)
+                if dt not in existing_dates
+            ]
+            added = 0
+            if to_create:
+                self.db.session.bulk_save_objects(to_create)
+                self.db.session.commit()
+                added = len(to_create)
+            else:
+                added = 0
+            skipped = len(existing_dates)
+            return {"added": added, "skipped": skipped}
+        except Exception:
+            self.db.session.rollback()
+            logger.exception('Fehler bei ensure_availability_range_for_artist artist_id=%s', artist_id)
+            raise
+
+    def ensure_auto_availability_for_artist(self, artist_id: int, days_ahead: int = 365) -> dict:
+        """
+        Convenience: Füllt alle Tage von heute bis heute+days_ahead-1 für einen Artist (idempotent).
+        """
+        start = _date.today()
+        end = start + timedelta(days=days_ahead - 1)
+        return self.ensure_availability_range_for_artist(artist_id, start, end)
+
+   
