@@ -383,13 +383,34 @@ def get_artist_by_email(email):
 @jwt_required()
 @swag_from('../resources/swagger/artists_delete.yml')
 def delete_artist(artist_id):
-    """Löscht den eingeloggten Artist, falls er mit der angegebenen ID übereinstimmt."""
-    user_supabase_id = get_jwt_identity()
+    """Löscht einen Artist-Eintrag, sofern Berechtigung vorliegt.
+    Erlaubt ist:
+      • Admin (aktueller User)
+      • Eigentümer (artist.supabase_user_id == current_user_id)
+      • Sonderfall: "verwaister" Artist (artist.supabase_user_id is None) mit gleicher E-Mail wie im JWT
+    """
+    current_user_id = get_jwt_identity()
+    claims = get_jwt()
+    jwt_email = None
+    try:
+        jwt_email = claims.get("email") or claims.get("user_metadata", {}).get("email")
+    except Exception:
+        jwt_email = None
+
     artist = artist_mgr.get_artist(artist_id)
     if not artist:
         return jsonify({'error': 'Not found'}), 404
-    if not (artist.supabase_user_id == user_supabase_id or (artist and getattr(artist, 'is_admin', False))):
+
+    # aktuellen Artist (vom aufrufenden User) laden, um Admin-Status korrekt zu prüfen
+    current_artist = artist_mgr.get_artist_by_supabase_user_id(current_user_id)
+    is_admin = bool(getattr(current_artist, 'is_admin', False)) if current_artist else False
+
+    is_owner = (artist.supabase_user_id == current_user_id)
+    is_orphan_self = (getattr(artist, 'supabase_user_id', None) is None and jwt_email and getattr(artist, 'email', None) == jwt_email)
+
+    if not (is_admin or is_owner or is_orphan_self):
         return jsonify({'error': 'Forbidden'}), 403
+
     success = artist_mgr.delete_artist(artist_id)
     if success:
         return jsonify({'deleted': artist_id}), 200
