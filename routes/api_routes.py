@@ -162,7 +162,35 @@ def get_my_artist():
         'gallery_urls': getattr(artist, 'gallery_urls', []) or [],
         'approval_status': getattr(artist, 'approval_status', None),
         'rejection_reason': getattr(artist, 'rejection_reason', None),
+        'approved': (getattr(artist, 'approval_status', '') or '').lower() == 'approved',
+        'guidelines_accepted': bool(getattr(artist, 'guidelines_accepted', False) or getattr(artist, 'guidelinesAccepted', False)),
     }), 200
+
+
+# New endpoint: Accept artist guidelines
+@api_bp.route('/artists/me/accept_guidelines', methods=['POST'])
+@jwt_required()
+@swag_from('../resources/swagger/artists_me_accept_guidelines_post.yml', validation=False)
+def accept_my_guidelines():
+    """Marks the current artist as having accepted the guidelines (boolean flag)."""
+    user_id, artist = get_current_user()
+    if not artist:
+        return jsonify({'error': 'Current user not linked to an artist'}), 403
+    try:
+        # Accept multiple possible column names for forward/backward compatibility
+        if hasattr(artist, 'guidelines_accepted'):
+            artist.guidelines_accepted = True
+        elif hasattr(artist, 'guidelinesAccepted'):
+            setattr(artist, 'guidelinesAccepted', True)
+        else:
+            # If the column is missing, we still respond gracefully
+            return jsonify({'ok': False, 'note': 'guidelines_accepted column missing on Artist model'}), 501
+        db.session.commit()
+        return jsonify({'ok': True, 'guidelines_accepted': True}), 200
+    except Exception as e:
+        logger.exception('Failed to set guidelines_accepted')
+        db.session.rollback()
+        return jsonify({'error': 'Failed to accept guidelines', 'details': str(e)}), 500
 
 
 # Explizite Freigabe anfordern (Status -> pending)
@@ -339,6 +367,8 @@ def ensure_my_artist():
             'gallery_urls': getattr(artist, 'gallery_urls', []) or [],
             'approval_status': getattr(artist, 'approval_status', None),
             'rejection_reason': getattr(artist, 'rejection_reason', None),
+            'approved': (getattr(artist, 'approval_status', '') or '').lower() == 'approved',
+            'guidelines_accepted': bool(getattr(artist, 'guidelines_accepted', False) or getattr(artist, 'guidelinesAccepted', False)),
         }), 200
 
     # 2) Fallback: claim orphan by email (case-insensitive)
@@ -411,6 +441,8 @@ def ensure_my_artist():
         'gallery_urls': getattr(artist, 'gallery_urls', []) or [],
         'approval_status': getattr(artist, 'approval_status', None),
         'rejection_reason': getattr(artist, 'rejection_reason', None),
+        'approved': (getattr(artist, 'approval_status', '') or '').lower() == 'approved',
+        'guidelines_accepted': bool(getattr(artist, 'guidelines_accepted', False) or getattr(artist, 'guidelinesAccepted', False)),
     }), 200
 
 @api_bp.route('/artists/email/<string:email>', methods=['GET'])
@@ -529,15 +561,13 @@ def update_artist(artist_id):
 @swag_from('../resources/swagger/availability_get.yml')
 def get_availability():
     """Gibt alle Verfügbarkeitstage des eingeloggten Artists zurück oder, falls angegeben, eines anderen Artists (mit Berechtigung)."""
-    current_supabase_id = get_jwt_identity()
-    logger.debug(f"get_availability called by supabase_user_id={current_supabase_id} with args={request.args}")
+    user_id, current_artist = get_current_user()
+    logger.debug(f"get_availability called by supabase_user_id={user_id} with args={request.args}")
 
     artist_id_param = request.args.get('artist_id')
 
-    # resolve current artist from token
-    current_artist = artist_mgr.get_artist_by_supabase_user_id(current_supabase_id)
     if not current_artist:
-        logger.warning(f"Current user {current_supabase_id} not linked to an artist")
+        logger.warning(f"Current user {user_id} not linked to an artist (after ensure)")
         return jsonify({'error': 'Current user not linked to an artist'}), 403
 
     target_artist = current_artist
@@ -560,7 +590,7 @@ def get_availability():
     # fetch and return slots: if target is current artist use user-specific helper for better handling
     try:
         if target_artist.id == current_artist.id:
-            slots = avail_mgr.get_availabilities_for_user(current_supabase_id)
+            slots = avail_mgr.get_availabilities_for_user(user_id)
         else:
             slots = avail_mgr.get_availabilities(target_artist.id)
     except Exception as e:
@@ -577,8 +607,7 @@ def get_availability():
 @swag_from('../resources/swagger/availability_post.yml')
 def add_availability():
     """Fügt einen oder mehrere Verfügbarkeitstage für den eingeloggten Artist hinzu (oder, wenn admin, für einen anderen über artist_id)."""
-    current_supabase_id = get_jwt_identity()
-    current_artist = artist_mgr.get_artist_by_supabase_user_id(current_supabase_id)
+    user_id, current_artist = get_current_user()
     if not current_artist:
         return jsonify({'error': 'Current user not linked to an artist'}), 403
 
@@ -638,8 +667,7 @@ def add_availability():
 @swag_from('../resources/swagger/availability_put.yml')
 def replace_availability():
     """Ersetzt die Verfügbarkeiten des eingeloggten Artists komplett mit der übergebenen Liste von dates (oder, wenn admin, eines anderen Artists via artist_id)."""
-    current_supabase_id = get_jwt_identity()
-    current_artist = artist_mgr.get_artist_by_supabase_user_id(current_supabase_id)
+    user_id, current_artist = get_current_user()
     if not current_artist:
         return jsonify({'error': 'Current user not linked to an artist'}), 403
 
@@ -674,8 +702,7 @@ def replace_availability():
 def remove_availability(slot_id):
     """Entfernt einen Verfügbarkeitstag des eingeloggten Artists anhand der ID. Admins können auch andere löschen."""
     logger.debug(f"remove_availability called with slot_id={slot_id}")
-    current_supabase_id = get_jwt_identity()
-    current_artist = artist_mgr.get_artist_by_supabase_user_id(current_supabase_id)
+    user_id, current_artist = get_current_user()
     if not current_artist:
         return jsonify({'error': 'Current user not linked to an artist'}), 403
     slot = Availability.query.get(slot_id)

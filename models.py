@@ -56,6 +56,9 @@ class Artist(UserMixin, db.Model):
     # Beziehung: Admin, der den Artist freigegeben/abgelehnt hat (self-referenziell)
     approved_by_admin = db.relationship('Artist', foreign_keys=[approved_by], remote_side=[id])
 
+    # Flag: Artist hat die Guidelines akzeptiert
+    guidelines_accepted = db.Column(db.Boolean, nullable=False, server_default='false')
+
     # Öffentliches Profil
     profile_image_url = db.Column(db.String(512), nullable=True)
     bio               = db.Column(db.Text, nullable=True)
