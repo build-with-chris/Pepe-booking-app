@@ -7,6 +7,7 @@ from managers.artist_manager import ArtistManager
 from managers.availability_manager import AvailabilityManager
 from managers.booking_requests_manager import BookingRequestManager
 from models import Availability, Discipline, db
+from sqlalchemy import func
 import logging
 
 from datetime import datetime
@@ -309,49 +310,92 @@ def update_my_profile():
 @jwt_required()
 @swag_from('../resources/swagger/artists_me_ensure_post.yml', validation=False)
 def ensure_my_artist():
-    """Ensure an Artist row exists for current Supabase user; return it."""
+    """Ensure an Artist row exists & is **linked** for the current Supabase user; return it.
+    Strategy:
+      1) Try by supabase_user_id (fast path)
+      2) If missing: claim an orphan artist with same email (case-insensitive)
+      3) If still missing: create minimal artist (status='unsubmitted') and link it
+    """
     user_id = get_jwt_identity()
-    artist = None
-    # Try direct lookup by supabase_user_id
+
+    # 1) Direct lookup by UID
     try:
         artist = artist_mgr.get_artist_by_supabase_user_id(user_id)
     except Exception:
         artist = None
-    # Fallback by email if not found
-    if not artist:
+    if artist:
+        return jsonify({
+            'id': artist.id,
+            'name': artist.name,
+            'email': artist.email,
+            'address': getattr(artist, 'address', None),
+            'phone_number': artist.phone_number,
+            'disciplines': [d.name for d in artist.disciplines],
+            'price_min': getattr(artist, 'price_min', None),
+            'price_max': getattr(artist, 'price_max', None),
+            'profile_image_url': getattr(artist, 'profile_image_url', None),
+            'bio': getattr(artist, 'bio', None),
+            'instagram': getattr(artist, 'instagram', None),
+            'gallery_urls': getattr(artist, 'gallery_urls', []) or [],
+            'approval_status': getattr(artist, 'approval_status', None),
+            'rejection_reason': getattr(artist, 'rejection_reason', None),
+        }), 200
+
+    # 2) Fallback: claim orphan by email (case-insensitive)
+    claims = get_jwt()
+    raw_email = (claims.get('email') or claims.get('user_metadata', {}).get('email') or '').strip()
+    raw_name = (claims.get('name') or claims.get('user_metadata', {}).get('name') or None)
+
+    email_norm = raw_email.lower() if isinstance(raw_email, str) else None
+
+    from models import Artist  # local import to avoid circulars at module import time
+
+    if email_norm:
         try:
-            claims = get_jwt()
-            email = claims.get("email") or claims.get("user_metadata", {}).get("email")
-            name = claims.get("name") or claims.get("user_metadata", {}).get("name")
-            if email:
-                fallback = artist_mgr.get_artist_by_email(email)
-                if fallback:
-                    if not getattr(fallback, "supabase_user_id", None):
-                        fallback.supabase_user_id = user_id
-                        db.session.commit()
-                    artist = fallback
-                else:
-                    # Minimal artist creation (unsubmitted)
-                    from models import Artist
-                    try:
-                        new_artist = Artist(
-                            name=name or (email.split("@")[0] if isinstance(email, str) else None),
-                            email=email,
-                            supabase_user_id=user_id,
-                            approval_status="unsubmitted",
-                        )
-                        db.session.add(new_artist)
-                        db.session.commit()
-                        artist = new_artist
-                    except Exception:
-                        db.session.rollback()
-                        artist = None
+            orphan = (Artist.query
+                      .filter(func.lower(Artist.email) == email_norm)
+                      .filter(Artist.supabase_user_id.is_(None))
+                      .first())
+            if orphan:
+                orphan.supabase_user_id = user_id
+                db.session.commit()
+                artist = orphan
         except Exception:
+            db.session.rollback()
             artist = None
-    # If still no artist, return error
+
+    # 3) If still not found: try exact email match with UID missing, otherwise create a new minimal artist
+    if not artist and email_norm:
+        try:
+            existing = (Artist.query
+                        .filter(func.lower(Artist.email) == email_norm)
+                        .first())
+            if existing and not getattr(existing, 'supabase_user_id', None):
+                existing.supabase_user_id = user_id
+                db.session.commit()
+                artist = existing
+        except Exception:
+            db.session.rollback()
+            artist = None
+
     if not artist:
-        return jsonify({'error': 'Unable to ensure artist for current user'}), 500
-    # Always return the artist record (existing or newly created)
+        # Create minimal linked artist even if email is missing; name can fallback to local-part
+        try:
+            name_value = raw_name or (raw_email.split('@')[0] if isinstance(raw_email, str) and '@' in raw_email else None)
+            new_artist = Artist(
+                name=name_value,
+                email=(email_norm or raw_email or None),
+                supabase_user_id=user_id,
+                approval_status='unsubmitted',
+            )
+            db.session.add(new_artist)
+            db.session.commit()
+            artist = new_artist
+        except Exception:
+            db.session.rollback()
+            return jsonify({'error': 'Unable to ensure artist for current user'}), 500
+
+    # Return unified payload
     return jsonify({
         'id': artist.id,
         'name': artist.name,
