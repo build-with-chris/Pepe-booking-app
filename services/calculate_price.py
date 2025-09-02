@@ -24,7 +24,7 @@ def calculate_price(base_min, base_max,
     # 1. Event type
     event_weights = {
         'Private Feier': 0.6,
-        'Firmenfeier':   1.5,
+        'Firmenfeier':   1.35,
         'Teamevent':     1.05,
         'Streetshow':    0.7
     }
@@ -46,18 +46,18 @@ def calculate_price(base_min, base_max,
         # Frontend liefert nun Buckets: Unter 200 (~199), 200–500 (~350), Über 500 (~501)
         # Wir mappen auf drei Stufen: ≤200, 201–500, >500
         if num_guests <= 200:
-            g_mult = 1.0
+            g_mult = 0.9
         elif num_guests <= 500:
-            g_mult = 1.2
+            g_mult = 1.1
         else:
-            g_mult = 1.35
+            g_mult = 1.25
 
     min_p *= g_mult
     max_p *= g_mult
 
     # 3. Weekend
     if is_weekend:
-        min_p *= 1.15
+        min_p *= 1.05
         max_p *= 1.15
 
     # 4. Newsletter discount (5%)
@@ -78,16 +78,16 @@ def calculate_price(base_min, base_max,
     else:
         # Base factors for 10 and 15 minutes
         if rounded_duration == 10:
-            duration_factor = 1.4
+            duration_factor = 1.2
         elif rounded_duration == 15:
-            duration_factor = 1.6
+            duration_factor = 1.3
         elif rounded_duration > 15:
             # For each additional 5 minutes above 15, add 0.1
             extra_intervals = (rounded_duration - 15) // 5
-            duration_factor = 1.6 + (extra_intervals * 0.1)
+            duration_factor = 1.3 + (extra_intervals * 0.1)
         else:
             # For durations between 6 and 9 (rounded to 10), fallback to 1.4
-            duration_factor = 1.4
+            duration_factor = 1.2
 
     min_p *= duration_factor
     max_p *= duration_factor

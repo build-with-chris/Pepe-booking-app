@@ -782,7 +782,7 @@ def artist_offer(req_id):
 
 
 # =============================
-# Invoices (Option A – UID-Folder in Supabase)
+# Invoices (UID-Folder in Supabase)
 # =============================
 try:
     from models import Invoice  # optional: only if model exists
