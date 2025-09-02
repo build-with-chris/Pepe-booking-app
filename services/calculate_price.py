@@ -10,10 +10,9 @@ def calculate_price(base_min, base_max,
     """
     Berechnet eine Preisspanne (Min, Max) durch Anwendung folgender Schritte in dieser Reihenfolge:
 
-    1. Event-Typ-Multiplikator ('Private Feier': 0.6,'Firmenfeier': 1.5, 'Teamevent': 1.05, Streetshow': 0.7)
+    1. Event-Typ-Multiplikator ('Private Feier': 0.6,'Firmenfeier': 1.35, 'Teamevent': 1.05, Streetshow': 0.7)
     2. Gästezahl-Multiplikator (≤200 ×1.0, 201–500 ×1.2, >500 ×1.35)
-    3. Wochenend- oder Wochentag-Modifikator (1.2)
-    4. Newsletter-Rabatt (5%)
+    3. Wochenend- oder Wochentag-Modifikator (1.05)
     5. Indoor- vs. Outdoor-Faktor (1.2) 
     6. Dauer-Multiplikator basierend auf der Performance-Dauer
     7. Technikpauschalen (Licht, Sound) jeweils 450€
