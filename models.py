@@ -40,6 +40,8 @@ class Artist(UserMixin, db.Model):
     email          = db.Column(db.String(120), nullable=False, unique=True)
     phone_number   = db.Column(db.String(20), nullable=True)
     address        = db.Column(db.String(200), nullable=True)
+    lat            = db.Column(db.Float, nullable=True)
+    lon            = db.Column(db.Float, nullable=True)
     password_hash  = db.Column(db.Text(), nullable=True)
     push_token     = db.Column(db.String(200), nullable=True)  # for push notifications
     is_admin       = db.Column(db.Boolean, default=False)
@@ -100,6 +102,8 @@ class BookingRequest(db.Model):
     team_size          = db.Column(db.String(10), nullable=False)   
     number_of_guests   = db.Column(db.Integer, nullable=True)       
     event_address      = db.Column(db.String(200), nullable=True)   
+    event_lat         = db.Column(db.Float, nullable=True)
+    event_lon         = db.Column(db.Float, nullable=True)
     is_indoor          = db.Column(db.Boolean, default=True)       
     event_date         = db.Column(db.Date, nullable=False)         
     event_time         = db.Column(db.Time, nullable=True)          
