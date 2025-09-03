@@ -3,6 +3,7 @@ from services.calculate_price import calculate_price
 from flask import current_app
 from datetime import date, time, timedelta
 from typing import Optional, List
+from services.geo import geocode_address, haversine_km
 
 # Zulässige Statuswerte für Buchungsanfragen
 ALLOWED_STATUSES = ["angefragt", "angeboten", "akzeptiert", "abgelehnt", "storniert"]
@@ -71,6 +72,26 @@ class BookingRequestManager:
                     f"Invalid event_type: {event_type}. Allowed: {ALLOWED_EVENT_TYPES}"
                 )
 
+        # --- Distanzberechnung Event <-> Artists (Backend, zuverlässig) ---
+        travel_distance = 0.0
+        try:
+            event_coord = geocode_address(event_address)
+            distances = []
+            if event_coord:
+                for a in artists:
+                    a_addr = getattr(a, 'address', None)
+                    if not a_addr:
+                        continue
+                    a_coord = geocode_address(a_addr)
+                    if not a_coord:
+                        continue
+                    distances.append(haversine_km(a_coord, event_coord))
+            if distances:
+                # Heuristik: Mittelwert der Entfernungen aller zugeordneten Artists
+                travel_distance = round(sum(distances) / len(distances), 1)
+        except Exception as e:
+            current_app.logger.warning(f"distance calculation failed: {e}")
+
         req = BookingRequest(
             client_name=client_name,
             client_email=client_email,
@@ -87,7 +108,7 @@ class BookingRequestManager:
             special_requests=special_requests,
             needs_light=needs_light,
             needs_sound=needs_sound,
-            distance_km=distance_km,
+            distance_km=travel_distance if travel_distance else (distance_km or 0.0),
             newsletter_opt_in=newsletter_opt_in
         )
         # Verknüpfung mit Artists
