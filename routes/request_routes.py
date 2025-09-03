@@ -9,6 +9,10 @@ from flasgger import swag_from
 from managers.booking_requests_manager import BookingRequestManager
 from managers.artist_manager import ArtistManager
 
+from email.message import EmailMessage
+import smtplib
+import ssl
+
 # Manager-Instanzen
 request_mgr = BookingRequestManager()
 artist_mgr = ArtistManager()
@@ -133,6 +137,24 @@ def create_request():
             req.price_max = pmax
         db.session.commit()
 
+        # --- Notify matched artists via email (first simple version) ---
+        try:
+            date_str = req.event_date.strftime('%d.%m.%Y') if isinstance(req.event_date, datetime) else str(req.event_date)
+            city = (req.event_address.split(',')[-1].strip() if req.event_address else '')
+            subject = f"Neue Booking-Anfrage – {date_str}{', ' + city if city else ''}"
+
+            for artist in artist_objs:
+                # Skip if no email available
+                if not getattr(artist, 'email', None):
+                    current_app.logger.warning(f"Skipping email for artist {getattr(artist, 'id', '?')} – no email on record")
+                    continue
+
+                html = build_artist_new_request_email(artist, req)
+                send_email(artist.email, subject, html)
+        except Exception as e:
+            # Do not fail the API if email sending has issues; just log it.
+            current_app.logger.exception(f"Error while sending artist notification emails: {e}")
+
         return jsonify({
             'request_id': req.id,
             'price_min': pmin,
@@ -228,16 +250,77 @@ def send_push(artist, message):
     current_app.logger.info(f"PUSH to {artist.id}: {message}")
 
 
-@booking_bp.route('/requests/<int:req_id>/status', methods=['PUT'])
-@jwt_required()
-@swag_from('../resources/swagger/requests_status_put.yml')
-def change_status(req_id):
-    """Ändert den Status einer Buchungsanfrage."""
-    user_id = get_jwt_identity()
-    data = request.json
-    status = data.get('status')
-    # Statusänderung durchführen
-    req = request_mgr.change_status(req_id, status)
-    if not req:
-        return jsonify({'error':'Invalid'}), 400
-    return jsonify({'status': req.status})
+def build_artist_new_request_email(artist, req):
+    """Return a minimal HTML email for a new booking request."""
+    app_url = current_app.config.get('APP_URL', 'https://app.example.com')
+    date_str = req.event_date.strftime('%d.%m.%Y') if isinstance(req.event_date, datetime) else str(req.event_date)
+    city = (req.event_address.split(',')[-1].strip() if req.event_address else '')
+    price_range = None
+    try:
+        if req.price_min is not None and req.price_max is not None:
+            price_range = f"{int(req.price_min)}–{int(req.price_max)} €"
+    except Exception:
+        price_range = None
+
+    artist_name = getattr(artist, 'name', 'Künstler:in')
+
+    return f"""
+    <html>
+      <body style="font-family: Arial, Helvetica, sans-serif; line-height:1.5;">
+        <h2>Neue Anfrage für dich, {artist_name}!</h2>
+        <p>
+          <strong>Datum:</strong> {date_str}<br/>
+          <strong>Ort:</strong> {city or '—'}<br/>
+          <strong>Event:</strong> {req.event_type or '—'}<br/>
+          <strong>Disziplin(en):</strong> {', '.join(req.show_discipline) if getattr(req, 'show_discipline', None) else '—'}<br/>
+          <strong>Teamgröße:</strong> {req.team_size or '—'}<br/>
+          <strong>Dauer:</strong> {req.duration_minutes or '—'} Minuten<br/>
+          <strong>Preisrahmen:</strong> {price_range or 'wird noch abgestimmt'}
+        </p>
+        <p>
+          <a href="{app_url}/meine-anfragen" style="background:#111;color:#fff;padding:10px 16px;text-decoration:none;border-radius:6px;">Zu meinen Anfragen</a>
+        </p>
+        <hr style="border:none;border-top:1px solid #e5e5e5;"/>
+        <small>Diese E-Mail wurde automatisch gesendet. Bitte nicht direkt antworten.</small>
+      </body>
+    </html>
+    """
+
+
+def send_email(to_email: str, subject: str, html: str) -> bool:
+    """Send a simple HTML email using SMTP settings from Flask config.
+
+    Required config keys:
+      - SMTP_HOST
+      - SMTP_PORT (default 587)
+      - SMTP_USER
+      - SMTP_PASSWORD
+      - SMTP_FROM (fallbacks to SMTP_USER)
+    """
+    host = current_app.config.get('SMTP_HOST')
+    port = int(current_app.config.get('SMTP_PORT', 587))
+    user = current_app.config.get('SMTP_USER')
+    password = current_app.config.get('SMTP_PASSWORD')
+    from_addr = current_app.config.get('SMTP_FROM', user)
+
+    if not (host and user and password and to_email):
+        current_app.logger.warning("Email not sent — missing SMTP config or recipient")
+        return False
+
+    msg = EmailMessage()
+    msg['Subject'] = subject
+    msg['From'] = from_addr
+    msg['To'] = to_email
+    msg.set_content("Neue Anfrage – bitte im Browser öffnen.")
+    msg.add_alternative(html, subtype='html')
+
+    try:
+        with smtplib.SMTP(host, port) as server:
+            server.starttls(context=ssl.create_default_context())
+            server.login(user, password)
+            server.send_message(msg)
+        current_app.logger.info(f"Email sent to {to_email} (subject: {subject})")
+        return True
+    except Exception as e:
+        current_app.logger.exception(f"Failed to send email to {to_email}: {e}")
+        return False
