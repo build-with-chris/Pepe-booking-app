@@ -190,6 +190,7 @@ def create_request():
                     'needs_sound': req.needs_sound,
                     'show_discipline': req.show_discipline,
                     'team_size': team_size_for_calc,
+                    'team_count': (2 if team_size == 2 else (team_size if team_size and int(team_size) >= 1 else 1)),
                     'duration': req.duration_minutes,
                     'event_address': req.event_address
                 }
