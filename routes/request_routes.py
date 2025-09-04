@@ -171,6 +171,10 @@ def create_request():
                 # Gruppe (3+): keine Preisspanne
                 base_min = base_max = None
 
+            # Wenn wir für Duo bereits die Summe der beiden Artists gebildet haben,
+            # soll die Preisfunktion NICHT erneut pro Person mitteln/skalieren.
+            team_size_for_calc = 1 if (team_size == 2 and base_min is not None and duo_min is not None) else team_size
+
             if base_min is not None:
                 args = {
                     'base_min': base_min,
@@ -185,7 +189,7 @@ def create_request():
                     'needs_light': req.needs_light,
                     'needs_sound': req.needs_sound,
                     'show_discipline': req.show_discipline,
-                    'team_size': team_size,
+                    'team_size': team_size_for_calc,
                     'duration': req.duration_minutes,
                     'event_address': req.event_address
                 }

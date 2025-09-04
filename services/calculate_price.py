@@ -6,7 +6,7 @@ def calculate_price(base_min, base_max,
                     is_weekend=False, is_indoor=True,
                     needs_light=False, needs_sound=False,
                     team_size='solo',
-                    duration=0, event_address=None):
+                    duration=0, event_address=None, team_count=None):
     """
     Berechnet eine Preisspanne (Min, Max) durch Anwendung folgender Schritte in dieser Reihenfolge:
 
@@ -18,8 +18,35 @@ def calculate_price(base_min, base_max,
     7. Technikpauschalen (Licht, Sound) jeweils 450€
     8. Basis-Agenturgebühr (20 fee_pct)
     9. Distanzzuschläge (ab 300 km +200 €, ab 600 km +300 €, München –100 €)
-    10. Fahrkosten (0,5€/ km)
+    10. Fahrkosten pro Artist (0,5€/ km * team_count)
+
+    Travel costs are applied per artist via team_count (defaults to 1 if not provided, or derived from team_size).
     """
+    # derive effective team count (number of artists) for per-person costs
+    people = 1
+    if team_count is not None:
+        try:
+            people = max(1, int(team_count))
+        except Exception:
+            people = 1
+    else:
+        # fallback: infer from team_size if provided (e.g., 'solo'|'duo'|int)
+        try:
+            if isinstance(team_size, (int, float)):
+                people = max(1, int(team_size))
+            else:
+                ts = str(team_size).strip().lower()
+                if ts in ('duo', '2'):
+                    people = 2
+                elif ts in ('trio', '3'):
+                    people = 3
+                elif ts in ('quartet', '4'):
+                    people = 4
+                else:
+                    people = 1
+        except Exception:
+            people = 1
+
     # 1. Event type
     event_weights = {
         'Private Feier': 0.6,
@@ -118,7 +145,8 @@ def calculate_price(base_min, base_max,
 
     # 10. Travel fee
     rate_per_km = float(os.getenv("RATE_PER_KM", 0.5))
-    travel_fee  = distance_km * rate_per_km
+    travel_fee_single = distance_km * rate_per_km
+    travel_fee = travel_fee_single * max(1, people)
 
     # Final totals
     min_total = min_p + travel_fee + tech_fee + surcharge
