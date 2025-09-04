@@ -18,8 +18,8 @@ depends_on = None
 
 def upgrade():
     # Add cached coordinate columns
-    op.add_column('artist', sa.Column('lat', sa.Float(), nullable=True))
-    op.add_column('artist', sa.Column('lon', sa.Float(), nullable=True))
+    op.add_column('artists', sa.Column('lat', sa.Float(), nullable=True))
+    op.add_column('artists', sa.Column('lon', sa.Float(), nullable=True))
 
     op.add_column('booking_request', sa.Column('event_lat', sa.Float(), nullable=True))
     op.add_column('booking_request', sa.Column('event_lon', sa.Float(), nullable=True))
@@ -30,5 +30,5 @@ def downgrade():
     op.drop_column('booking_request', 'event_lon')
     op.drop_column('booking_request', 'event_lat')
 
-    op.drop_column('artist', 'lon')
-    op.drop_column('artist', 'lat')
+    op.drop_column('artists', 'lon')
+    op.drop_column('artists', 'lat')
