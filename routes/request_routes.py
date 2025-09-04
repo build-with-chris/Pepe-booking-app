@@ -105,6 +105,16 @@ def create_request():
         disciplines = data.get('disciplines', [])
         event_date = data['event_date']  # will raise KeyError if missing
         artist_objs = artist_mgr.get_artists_by_discipline(disciplines, event_date)
+        # Für die UI: kompaktes Matched-Payload (max. 5 Artists)
+        matched_payload = [
+            {
+                "id": getattr(a, 'id', None),
+                "name": getattr(a, 'name', None),
+                "price_min": getattr(a, 'price_min', None),
+                "price_max": getattr(a, 'price_max', None),
+            }
+            for a in (artist_objs[:5] if artist_objs else [])
+        ]
         req = request_mgr.create_request(
             client_name       = data['client_name'],
             client_email      = data['client_email'],
@@ -127,6 +137,7 @@ def create_request():
         )
 
         # Preisspanne berechnen basierend auf ausgewählten Artists und Parametern
+        duo_min = duo_max = None
         if not req.artists:
             req.price_min = None
             req.price_max = None
@@ -141,15 +152,23 @@ def create_request():
             ]
             travel_distance = req.distance_km if external_artists else 0.0
 
+            # Basis definieren je Teamgröße
             if team_size == 1:
+                # Solo: min/max aus den verfügbaren Artists (bisheriges Verhalten)
                 base_min = min(a.price_min for a in artist_objs)
                 base_max = max(a.price_max for a in artist_objs)
             elif team_size == 2:
-                sorted_by_min = sorted(artist_objs, key=lambda a: a.price_min)
-                sorted_by_max = sorted(artist_objs, key=lambda a: a.price_max, reverse=True)
-                base_min = sum(a.price_min for a in sorted_by_min[:2])
-                base_max = sum(a.price_max for a in sorted_by_max[:2])
+                # Duo: nur wenn mindestens 2 Artists verfügbar sind
+                if len(artist_objs) >= 2:
+                    pair = artist_objs[:2]  # exakt die ersten zwei aus der gematchten Liste
+                    duo_min = sum(getattr(a, 'price_min', 0) for a in pair)
+                    duo_max = sum(getattr(a, 'price_max', 0) for a in pair)
+                    base_min = duo_min
+                    base_max = duo_max
+                else:
+                    base_min = base_max = None
             else:
+                # Gruppe (3+): keine Preisspanne
                 base_min = base_max = None
 
             if base_min is not None:
@@ -174,6 +193,7 @@ def create_request():
             else:
                 pmin = pmax = None
 
+            # In die DB schreiben
             req.price_min = pmin
             req.price_max = pmax
         db.session.commit()
@@ -196,12 +216,22 @@ def create_request():
             # Do not fail the API if email sending has issues; just log it.
             current_app.logger.exception(f"Error while sending artist notification emails: {e}")
 
-        return jsonify({
+        resp = {
             'request_id': req.id,
             'price_min': pmin,
             'price_max': pmax,
-            'num_available_artists': len(artist_objs)
-        }), 201
+            'num_available_artists': len(artist_objs),
+            'matched_artists': matched_payload,
+        }
+        # Duo-Zusatzpreise nur dann mitsenden, wenn tatsächlich >= 2 Artists vorhanden
+        if team_size == 2 and len(artist_objs) >= 2 and duo_min is not None and duo_max is not None:
+            resp['duo_price_min'] = duo_min
+            resp['duo_price_max'] = duo_max
+        # Gruppe: Flag setzen, keine Preise
+        if team_size and int(team_size) >= 3:
+            resp['group_pricing_pending'] = True
+
+        return jsonify(resp), 201
 
     except KeyError as ke:
         current_app.logger.warning("Missing field in create_request: %s", ke)
