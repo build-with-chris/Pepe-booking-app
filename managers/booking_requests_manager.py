@@ -2,11 +2,33 @@ from models import db, BookingRequest, booking_artists, Artist
 from services.calculate_price import calculate_price
 from flask import current_app
 from datetime import date, time, timedelta
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from services.geo import geocode_address, haversine_km
+from sqlalchemy import func
 
 # Zulässige Statuswerte für Buchungsanfragen
 ALLOWED_STATUSES = ["angefragt", "angeboten", "akzeptiert", "abgelehnt", "storniert"]
+
+# Mapping/Normalisierung: akzeptiere DE/EN-Schreibweisen
+STATUS_ALIASES = {
+    "requested": "angefragt",
+    "requested_pending": "angefragt",
+    "requested_pending_admin": "angefragt",
+    "offered": "angeboten",
+    "accepted": "akzeptiert",
+    "declined": "abgelehnt",
+    "rejected": "abgelehnt",
+    "canceled": "storniert",
+    "cancelled": "storniert",
+}
+
+def normalize_status(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    raw = str(value).strip().lower()
+    if raw in ALLOWED_STATUSES:
+        return raw
+    return STATUS_ALIASES.get(raw)
 
 # Zulässige Event-Typen für Buchungsanfragen
 ALLOWED_EVENT_TYPES = ['Private Feier', 'Firmenfeier', 'Incentive', 'Streetshow']
@@ -28,6 +50,49 @@ class BookingRequestManager:
     def get_request(self, request_id):
         """Gibt eine Buchungsanfrage anhand ihrer ID zurück oder None."""
         return BookingRequest.query.get(request_id)
+
+    def get_by_id(self, request_id: int) -> Optional[BookingRequest]:
+        """Alias für get_request, typisiert."""
+        return BookingRequest.query.get(request_id)
+
+    def delete(self, request_id: int) -> bool:
+        """Löscht eine Buchungsanfrage. Gibt True bei Erfolg zurück."""
+        obj = self.get_by_id(request_id)
+        if not obj:
+            return False
+        self.db.session.delete(obj)
+        self.db.session.commit()
+        return True
+
+    def accept(self, request_id: int) -> Optional[BookingRequest]:
+        """Komfort-Methode: setzt Status auf 'akzeptiert'."""
+        return self.change_status(request_id, "akzeptiert")
+
+    def list_requests(
+        self,
+        status: Optional[str] = None,
+        sort: str = "created_desc",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Tuple[List[BookingRequest], int]:
+        """Listet Anfragen optional gefiltert nach Status und sortiert nach created_at.
+        sort: 'created_desc' (default) | 'created_asc'
+        """
+        q = BookingRequest.query
+        if status:
+            norm = normalize_status(status)
+            if norm:
+                q = q.filter(BookingRequest.status == norm)
+            else:
+                # wenn unbekannter Status-Filter: keine Ergebnisse
+                return [], 0
+        if sort == "created_asc":
+            q = q.order_by(BookingRequest.created_at.asc())
+        else:
+            q = q.order_by(BookingRequest.created_at.desc())
+        total = q.with_entities(func.count()).scalar() or 0
+        items = q.limit(max(0, int(limit))).offset(max(0, int(offset))).all()
+        return items, int(total)
 
     def create_request(
         self,
@@ -214,9 +279,10 @@ class BookingRequestManager:
     def change_status(self, request_id, status):
         """Ändert den Status einer Buchungsanfrage, sofern der neue Status zulässig ist."""
         req = self.get_request(request_id)
-        if not req or status not in ALLOWED_STATUSES:
+        norm = normalize_status(status)
+        if not req or not norm or norm not in ALLOWED_STATUSES:
             return None
-        req.status = status
+        req.status = norm
         self.db.session.commit()
         return req
 

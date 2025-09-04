@@ -120,7 +120,11 @@ class BookingRequest(db.Model):
     price_offered      = db.Column(db.Integer, nullable=True)
     artist_gage        = db.Column(db.Integer, nullable=True)
     artist_offer_date  = db.Column(db.DateTime, nullable=True)
-    status             = db.Column(db.String(20), default='angefragt')
+    status             = db.Column(db.String(20), default='angefragt', index=True)
+    # Zeitstempel (für Sortierung & Historie)
+    created_at        = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at        = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    accepted_at       = db.Column(db.DateTime, nullable=True)
 
     # Beziehung: Eine Buchungsanfrage kann mehrere Artists involvieren und vice versa.
     artists          = db.relationship(

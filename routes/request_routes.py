@@ -34,6 +34,47 @@ def list_requests():
     result = request_mgr.get_requests_for_artist_with_recommendation(user_id)
     return jsonify(result)
 
+@booking_bp.route('/requests/list', methods=['GET'])
+@jwt_required()
+def list_requests_admin():
+    """Admin/Übersichts-Liste: optional nach Status filtern und nach Eingang sortieren (default: neueste zuerst).
+    Query-Parameter:
+      - status: optional (z.B. angefragt|angeboten|akzeptiert|abgelehnt|storniert)
+      - sort: created_desc (default) | created_asc
+      - limit, offset
+    """
+    try:
+        status = request.args.get('status') or None
+        sort = request.args.get('sort') or 'created_desc'
+        limit = int(request.args.get('limit') or 50)
+        offset = int(request.args.get('offset') or 0)
+    except Exception:
+        return jsonify({"error": "invalid_query_params"}), 400
+
+    items, total = request_mgr.list_requests(status=status, sort=sort, limit=limit, offset=offset)
+
+    def to_json(r: BookingRequest):
+        return {
+            "id": r.id,
+            "status": r.status,
+            "created_at": r.created_at.isoformat() if getattr(r, 'created_at', None) else None,
+            "event_address": r.event_address,
+            "event_lat": getattr(r, 'event_lat', None),
+            "event_lon": getattr(r, 'event_lon', None),
+            "price_min": getattr(r, 'price_min', None),
+            "price_max": getattr(r, 'price_max', None),
+            "num_available_artists": getattr(r, 'num_available_artists', None),
+        }
+
+    return jsonify({
+        "items": [to_json(r) for r in items],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "sort": sort,
+        "status": status,
+    })
+
 # kein Login erforderlich!
 @booking_bp.route('/requests', methods=['POST'])
 @swag_from('../resources/swagger/requests_post.yml')
@@ -244,6 +285,30 @@ def set_offer(req_id):
         return jsonify({'status': req.status, 'price_offered': req.price_offered})
     else:
         return jsonify({'status': req.status}), 200
+
+@booking_bp.route('/requests/<int:req_id>/accept', methods=['PUT'])
+@jwt_required()
+def accept_request(req_id: int):
+    try:
+        updated = request_mgr.change_status(req_id, 'akzeptiert')
+        if not updated:
+            return jsonify({"error": "not_found_or_invalid_status"}), 404
+        return jsonify({"ok": True, "id": updated.id, "status": updated.status})
+    except Exception as e:
+        current_app.logger.exception(f"accept_request failed for id={req_id}: {e}")
+        return jsonify({"error": "accept_failed"}), 500
+
+@booking_bp.route('/requests/<int:req_id>', methods=['DELETE'])
+@jwt_required()
+def delete_request(req_id: int):
+    try:
+        ok = request_mgr.delete(req_id)
+        if not ok:
+            return jsonify({"error": "not_found"}), 404
+        return jsonify({"ok": True, "deleted_id": req_id})
+    except Exception as e:
+        current_app.logger.exception(f"delete_request failed for id={req_id}: {e}")
+        return jsonify({"error": "delete_failed"}), 500
 
 def send_push(artist, message):
     """Protokolliert eine Push-Nachricht an einen Artist."""
