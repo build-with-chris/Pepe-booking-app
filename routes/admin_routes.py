@@ -570,6 +570,7 @@ def dashboard():
                 'event_time': r.event_time.isoformat() if r.event_time else None,
                 'team_size': r.team_size,
                 'status': r.status,
+                'created_at': r.created_at.isoformat() if getattr(r, 'created_at', None) else None,
                 'price_offered': r.price_offered
             }
             for r in offers
