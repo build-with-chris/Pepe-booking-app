@@ -260,8 +260,8 @@ def update_my_profile():
         if not isinstance(gallery_urls, list):
             return jsonify({'error': 'gallery_urls must be a list of URLs'}), 400
         gallery_urls = [str(u).strip() for u in gallery_urls if isinstance(u, (str, bytes))]
-        if len(gallery_urls) > 3:
-            return jsonify({'error': 'gallery_urls may contain at most 3 items'}), 400
+        if len(gallery_urls) > 9:
+            return jsonify({'error': 'gallery_urls may contain at most 9 items'}), 400
 
     if disciplines is not None and not isinstance(disciplines, list):
         return jsonify({'error': 'disciplines must be a list of strings'}), 400
@@ -535,8 +535,8 @@ def update_artist(artist_id):
                 if not isinstance(val, list):
                     return jsonify({'error': 'gallery_urls must be a list of URLs'}), 400
                 urls = [str(u).strip() for u in val if isinstance(u, (str, bytes))]
-                if len(urls) > 3:
-                    return jsonify({'error': 'gallery_urls may contain at most 3 items'}), 400
+                if len(urls) > 9:
+                    return jsonify({'error': 'gallery_urls may contain at most 9 items'}), 400
                 artist.gallery_urls = urls
         if 'disciplines' in data:
             def get_or_create_discipline(name):
