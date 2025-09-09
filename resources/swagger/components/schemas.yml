@@ -1,0 +1,202 @@
+
+
+components:
+  schemas:
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: Machine-readable error code (e.g. validation_error)
+          example: validation_error
+        message:
+          type: string
+          description: Human-friendly error message
+          example: "Disciplines must be provided"
+
+    Artist:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 123
+        name:
+          type: string
+          example: "Jane Doe"
+        email:
+          type: string
+          format: email
+          nullable: true
+          example: "jane@example.com"
+        phone_number:
+          type: string
+          nullable: true
+          example: "+49 171 1234567"
+        approval_status:
+          type: string
+          description: Current approval state
+          enum: [pending, approved, rejected]
+          example: approved
+        rejection_reason:
+          type: string
+          nullable: true
+          example: "Profile incomplete"
+        is_admin:
+          type: boolean
+          description: Admin flag for this artist account
+          example: false
+        supabase_user_id:
+          type: string
+          nullable: true
+          description: Supabase auth user id
+          example: "user-abc123"
+        price_min:
+          type: number
+          format: float
+          nullable: true
+          example: 700
+        price_max:
+          type: number
+          format: float
+          nullable: true
+          example: 1200
+        disciplines:
+          type: array
+          items: { type: string }
+          example: ["Juggling", "Acrobatics"]
+        profile_image_url:
+          type: string
+          nullable: true
+          example: "https://cdn.example.com/profiles/123.webp"
+        gallery_urls:
+          type: array
+          items: { type: string }
+          example:
+            - "https://cdn.example.com/gallery/1.webp"
+            - "https://cdn.example.com/gallery/2.webp"
+        bio:
+          type: string
+          nullable: true
+          example: "Performer with 10+ years of experience."
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    BookingRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 456
+        status:
+          type: string
+          description: Request workflow status
+          enum: [requested, offered, accepted, rejected, cancelled]
+          example: requested
+        client_name:
+          type: string
+          example: "Max Mustermann"
+        client_email:
+          type: string
+          format: email
+          example: "max@example.com"
+        event_date:
+          type: string
+          format: date
+          example: "2025-11-20"
+        event_time:
+          type: string
+          example: "19:30"
+        event_address:
+          type: string
+          example: "Marienplatz 1, 80331 München"
+        duration_minutes:
+          type: integer
+          example: 30
+        number_of_guests:
+          type: integer
+          example: 150
+        event_type:
+          type: string
+          example: "Gala"
+        team_size:
+          oneOf:
+            - type: integer
+            - type: string
+          example: "duo"
+        disciplines:
+          type: array
+          items: { type: string }
+          example: ["Cyr Wheel", "Handstand"]
+        price_min:
+          type: number
+          format: float
+          nullable: true
+          example: 800
+        price_max:
+          type: number
+          format: float
+          nullable: true
+          example: 1200
+        num_available_artists:
+          type: integer
+          nullable: true
+          example: 3
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    Availability:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 42
+        artist_id:
+          type: integer
+          example: 123
+        date:
+          type: string
+          format: date
+          example: "2025-10-10"
+        is_available:
+          type: boolean
+          description: true if artist is available that day
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 99
+        artist_id:
+          type: integer
+          example: 123
+        storage_path:
+          type: string
+          description: Storage path to the uploaded invoice document
+          example: "profiles/artist/123/invoices/2025-09-01.pdf"
+        invoice_date:
+          type: string
+          format: date
+          example: "2025-09-01"
+        amount_cents:
+          type: integer
+          nullable: true
+          example: 45000
+        created_at:
+          type: string
+          format: date-time
+          nullable: true

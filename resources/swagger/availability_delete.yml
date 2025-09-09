@@ -1,20 +1,19 @@
-summary: Verfügbarkeitstag löschen
-description: |
-  Löscht einen bestimmten Verfügbarkeitstag des aktuell eingeloggten Artists. Nur der zugehörige Artist oder ein Admin mit Berechtigung kann diesen Slot entfernen.
 tags:
   - Availability
 security:
-  - Bearer: []
+  - bearerAuth: []
+summary: Delete an availability slot
+description: Delete a single availability slot by ID for the current artist (or admin).
 parameters:
   - in: path
     name: slot_id
     required: true
-    description: ID des Verfügbarkeitsslots, das gelöscht werden soll
+    description: Availability slot ID
     schema:
       type: integer
 responses:
   200:
-    description: Slot erfolgreich gelöscht
+    description: Slot deleted
     content:
       application/json:
         schema:
@@ -22,42 +21,21 @@ responses:
           properties:
             deleted:
               type: integer
-              example: 42
   400:
-    description: Ungültiger Request (z. B. falsche ID)
+    description: Invalid request
     content:
       application/json:
         schema:
-          type: object
-          properties:
-            error:
-              type: string
+          $ref: '#/components/schemas/Error'
   403:
-    description: Forbidden – der eingeloggte Benutzer darf diesen Slot nicht löschen
+    description: Forbidden
     content:
       application/json:
         schema:
-          type: object
-          properties:
-            error:
-              type: string
+          $ref: '#/components/schemas/Error'
   404:
-    description: Slot nicht gefunden
+    description: Slot not found
     content:
       application/json:
         schema:
-          type: object
-          properties:
-            error:
-              type: string
-  default:
-    description: Unerwarteter Fehler
-    content:
-      application/json:
-        schema:
-          type: object
-          properties:
-            error:
-              type: string
-            details:
-              type: string
+          $ref: '#/components/schemas/Error'

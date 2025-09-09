@@ -1,0 +1,59 @@
+
+
+tags:
+  - AdminInvoices
+security:
+  - bearerAuth: []
+summary: List all invoices (admin only)
+description: Returns all invoices across all artists. Admin only. Supports optional paging.
+parameters:
+  - in: query
+    name: limit
+    required: false
+    description: Max number of items to return (default 50)
+    schema:
+      type: integer
+      minimum: 1
+      maximum: 500
+      default: 50
+  - in: query
+    name: offset
+    required: false
+    description: Number of items to skip (for pagination)
+    schema:
+      type: integer
+      minimum: 0
+      default: 0
+responses:
+  200:
+    description: List of invoices
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Invoice'
+            total:
+              type: integer
+              example: 123
+            limit:
+              type: integer
+              example: 50
+            offset:
+              type: integer
+              example: 0
+  403:
+    description: Forbidden – admin only
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  500:
+    description: Internal server error
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'

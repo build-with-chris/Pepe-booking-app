@@ -1,69 +1,40 @@
-summary: Verfügbarkeiten eines Artists abrufen
-description: |
-  Gibt alle Verfügbarkeitstage des aktuell angemeldeten Artists zurück. Optional kann über den Query-Parameter `artist_id` ein anderer Artist abgefragt werden, vorausgesetzt der aufrufende Benutzer ist entweder derselbe Artist oder hat Admin-Rechte.
 tags:
   - Availability
 security:
-  - Bearer: []
+  - bearerAuth: []
+summary: Get availability
+description: Return all availability days for the current artist, or another artist if allowed.
 parameters:
   - in: query
     name: artist_id
     required: false
-    description: ID des Artists, dessen Verfügbarkeiten angefragt werden. Nur erlaubt für den gleichen Artist oder Admin.
+    description: Artist ID to query (must be same artist or admin)
     schema:
       type: integer
 responses:
   200:
-    description: Liste der verfügbaren Tage
+    description: List of availability days
     content:
       application/json:
         schema:
           type: array
           items:
-            type: object
-            properties:
-              id:
-                type: integer
-              artist_id:
-                type: integer
-              date:
-                type: string
-                format: date
+            $ref: '#/components/schemas/Availability'
   400:
-    description: Ungültiger Parameter (z. B. kein integer bei artist_id)
+    description: Invalid parameter
     content:
       application/json:
         schema:
-          type: object
-          properties:
-            error:
-              type: string
+          $ref: '#/components/schemas/Error'
   403:
-    description: Keine Berechtigung oder kein verknüpfter Artist
+    description: Forbidden or no linked artist
     content:
       application/json:
         schema:
-          type: object
-          properties:
-            error:
-              type: string
+          $ref: '#/components/schemas/Error'
   404:
-    description: Artist nicht gefunden
+    description: Artist not found
     content:
       application/json:
         schema:
-          type: object
-          properties:
-            error:
-              type: string
-  default:
-    description: Unerwarteter Fehler
-    content:
-      application/json:
-        schema:
-          type: object
-          properties:
-            error:
-              type: string
-            details:
-              type: string
+          $ref: '#/components/schemas/Error'

@@ -1,30 +1,41 @@
 tags:
   - AdminArtistStatus
-summary: Listet pro Artist den Status zu einer Anfrage
-description: Gibt für die angegebene Booking-Request den Status jedes verknüpften Artists zurück.
 security:
-  - Bearer: []
+  - bearerAuth: []
+summary: List artist statuses for a booking request
+description: Returns the status for each artist linked to the given booking request. Admin only.
 parameters:
   - in: path
     name: req_id
-    type: integer
     required: true
-    description: ID der Booking-Request
+    description: Booking request ID
+    schema:
+      type: integer
 responses:
   200:
-    description: Liste der Artist-Status
-    schema:
-      type: array
-      items:
-        type: object
-        properties:
-          artist_id:
-            type: integer
-          status:
-            type: string
-            enum: [angefragt, angeboten, akzeptiert, abgelehnt, storniert]
+    description: List of artist statuses for the request
+    content:
+      application/json:
+        schema:
+          type: array
+          items:
+            type: object
+            properties:
+              artist_id:
+                type: integer
+              status:
+                type: string
+                enum: [requested, offered, accepted, rejected, cancelled]
   403:
-    description: Nicht erlaubt
+    description: Forbidden – admin only
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
   404:
-    description: Anfrage nicht gefunden
-
+    description: Request not found
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+        

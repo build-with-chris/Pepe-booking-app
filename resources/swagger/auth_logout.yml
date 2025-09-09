@@ -1,5 +1,9 @@
 tags:
   - Auth
+security:
+  - bearerAuth: []
+summary: Log out current user
+description: Logs out the current user.
 responses:
   200:
-    description: Logs out the current user and redirects to login page
+    description: Logout successful

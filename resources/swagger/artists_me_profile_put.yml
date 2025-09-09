@@ -1,63 +1,48 @@
-swagger: "2.0"
-info:
-  title: Mein Artist-Profil aktualisieren
-  version: "1.0"
-  description: >
-    Aktualisiert öffentlich sichtbare Felder. Optional kann `approval_status` auf `pending` gesetzt werden,
-    um das Profil zur Prüfung einzureichen (nur wenn noch nicht approved).
 tags:
   - Artists
-securityDefinitions:
-  bearerAuth:
-    type: apiKey
-    name: Authorization
-    in: header
-paths:
-  /artists/me/profile:
-    put:
-      tags: [Artists]
-      security: [{ bearerAuth: [] }]
-      summary: Profil aktualisieren (PUT/PATCH)
-      parameters:
-        - in: body
-          name: body
-          required: true
-          schema:
-            type: object
-            properties:
-              profile_image_url: { type: string, example: "https://..." }
-              bio: { type: string, example: "Kurzbeschreibung..." }
-              instagram: { type: string, example: "https://instagram.com/…" }
-              gallery_urls:
-                type: array
-                maxItems: 3
-                items: { type: string }
-              approval_status:
-                type: string
-                enum: [pending]
-                description: Nur 'pending' ist erlaubt, wenn noch nicht approved.
-      responses:
-        200:
-          description: OK
-          schema:
-            type: object
-            properties:
-              profile_image_url: { type: string }
-              bio: { type: string }
-              instagram: { type: string }
-              gallery_urls:
-                type: array
-                items: { type: string }
-              approval_status:
-                type: string
-                enum: [unsubmitted, pending, approved, rejected]
-              rejection_reason: { type: string, nullable: true }
-        400:
-          description: Validation error
-        403:
-          description: Current user not linked to an artist
-        500:
-          description: Failed to update profile
-    patch:
-      $ref: "#/paths/~1artists~1me~1profile/put"
-      
+security:
+  - bearerAuth: []
+summary: Update my public profile fields (PUT)
+description: Update public profile fields. You may set approval_status to 'pending' if not yet approved.
+requestBody:
+  required: true
+  content:
+    application/json:
+      schema:
+        type: object
+        properties:
+          profile_image_url: { type: string, nullable: true }
+          bio: { type: string, nullable: true }
+          instagram: { type: string, nullable: true }
+          gallery_urls:
+            type: array
+            maxItems: 9
+            items: { type: string }
+          approval_status:
+            type: string
+            enum: [pending]
+responses:
+  200:
+    description: Profile updated
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Artist'
+  400:
+    description: Validation error
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  403:
+    description: Current user not linked to an artist
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  500:
+    description: Failed to update profile
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'

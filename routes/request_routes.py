@@ -1,3 +1,54 @@
+import time
+from typing import Deque, Tuple, Dict, Any
+from collections import deque
+
+# In-memory rate limit store: ip -> deque[timestamps]
+_RATE_LIMIT_WINDOW_SECONDS = 3600  # 1 hour
+_RATE_LIMIT_MAX_REQUESTS = 5       # 5 requests/hour per IP
+_rate_limit_hits: Dict[str, Deque[float]] = {}
+
+# In-memory idempotency cache: key -> (created_ts, payload_dict)
+_IDEMPOTENCY_TTL_SECONDS = 3600
+_idempotency_cache: Dict[str, Tuple[float, dict]] = {}
+
+def _client_ip() -> str:
+    """Best-effort client IP extraction (respects X-Forwarded-For)."""
+    xff = request.headers.get('X-Forwarded-For')
+    if xff:
+        return xff.split(',')[0].strip()
+    return request.remote_addr or 'unknown'
+
+def _rate_limit_allow(ip: str) -> bool:
+    """Return True if request is allowed under the rate limit."""
+    now = time.time()
+    dq = _rate_limit_hits.setdefault(ip, deque())
+    # prune old entries
+    cutoff = now - _RATE_LIMIT_WINDOW_SECONDS
+    while dq and dq[0] < cutoff:
+        dq.popleft()
+    if len(dq) >= _RATE_LIMIT_MAX_REQUESTS:
+        return False
+    dq.append(now)
+    return True
+
+def _idempotency_lookup(key: str):
+    """Return cached payload if key exists and not expired, else None."""
+    if not key:
+        return None
+    entry = _idempotency_cache.get(key)
+    if not entry:
+        return None
+    created, payload = entry
+    if time.time() - created > _IDEMPOTENCY_TTL_SECONDS:
+        # expired
+        _idempotency_cache.pop(key, None)
+        return None
+    return payload
+
+def _idempotency_store(key: str, payload: dict) -> None:
+    if not key:
+        return
+    _idempotency_cache[key] = (time.time(), payload)
 from datetime import datetime
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
@@ -5,6 +56,8 @@ from services.calculate_price import calculate_price
 from flask import current_app
 from models import db, Artist, BookingRequest
 from flasgger import swag_from
+
+from helpers.http_responses import error_response
 
 from managers.booking_requests_manager import BookingRequestManager
 from managers.artist_manager import ArtistManager
@@ -18,8 +71,62 @@ request_mgr = BookingRequestManager()
 artist_mgr = ArtistManager()
 
 """
-Booking-Modul: Endpunkte zum Erstellen, Abrufen und Bearbeiten von Buchungsanfragen.
+Booking module: Endpoints to create, list and manage booking requests.
 """
+
+# --- 80/20 constants & helpers -------------------------------------------------
+MAX_MATCHED_ARTISTS = 5
+
+def _config_fee_pct():
+    try:
+        return float(current_app.config.get("AGENCY_FEE_PERCENT", 20))
+    except Exception:
+        return 20.0
+
+REQUIRED_REQUEST_FIELDS = (
+    "client_name",
+    "client_email",
+    "event_date",
+    "event_time",
+    "duration_minutes",
+    "event_type",
+    "number_of_guests",
+    "event_address",
+)
+
+def validate_create_request_payload(data: dict) -> tuple[bool, str | None]:
+    """Lightweight validation for create_request payload. Returns (ok, error_message)."""
+    if not isinstance(data, dict):
+        return False, "payload must be a JSON object"
+    for k in REQUIRED_REQUEST_FIELDS:
+        if data.get(k) in (None, ""):
+            return False, f"missing field: {k}"
+    # types
+    try:
+        int(data.get("duration_minutes"))
+        int(data.get("number_of_guests"))
+    except Exception:
+        return False, "duration_minutes and number_of_guests must be integers"
+    # disciplines optional but must be list when present
+    d = data.get("disciplines")
+    if d is not None and not isinstance(d, list):
+        return False, "disciplines must be a list"
+    return True, None
+
+def request_brief_json(r: BookingRequest) -> dict:
+    """Serialize booking request to a compact JSON structure for lists."""
+    return {
+        "id": r.id,
+        "status": r.status,
+        "created_at": r.created_at.isoformat() if getattr(r, "created_at", None) else None,
+        "event_address": r.event_address,
+        "event_lat": getattr(r, "event_lat", None),
+        "event_lon": getattr(r, "event_lon", None),
+        "price_min": getattr(r, "price_min", None),
+        "price_max": getattr(r, "price_max", None),
+        "num_available_artists": getattr(r, "num_available_artists", None),
+    }
+# ------------------------------------------------------------------------------
 
 # Blueprint für Buchungsanfragen unter /api/requests
 booking_bp = Blueprint('booking', __name__, url_prefix='/api/requests')
@@ -29,7 +136,7 @@ booking_bp = Blueprint('booking', __name__, url_prefix='/api/requests')
 @jwt_required()
 @swag_from('../resources/swagger/requests_get.yml')
 def list_requests():
-    """Gibt passende Buchungsanfragen für den eingeloggten Artist zurück."""
+    """Return booking requests that match the logged-in artist."""
     user_id = get_jwt_identity()
     result = request_mgr.get_requests_for_artist_with_recommendation(user_id)
     return jsonify(result)
@@ -37,37 +144,28 @@ def list_requests():
 @booking_bp.route('/requests/list', methods=['GET'])
 @jwt_required()
 def list_requests_admin():
-    """Admin/Übersichts-Liste: optional nach Status filtern und nach Eingang sortieren (default: neueste zuerst).
-    Query-Parameter:
-      - status: optional (z.B. angefragt|angeboten|akzeptiert|abgelehnt|storniert)
+    """Admin list of booking requests.
+    
+    Allows optional filtering by status and sorting by creation date.
+    Query parameters:
+      - status: optional (e.g. requested | offered | accepted | rejected | cancelled)
       - sort: created_desc (default) | created_asc
-      - limit, offset
+      - limit: number of results (default 50)
+      - offset: pagination offset
     """
     try:
         status = request.args.get('status') or None
         sort = request.args.get('sort') or 'created_desc'
         limit = int(request.args.get('limit') or 50)
         offset = int(request.args.get('offset') or 0)
-    except Exception:
-        return jsonify({"error": "invalid_query_params"}), 400
+    except Exception as e:
+        current_app.logger.warning(f"Invalid query params: {e}")
+        return error_response("validation_error", "Invalid query parameters", 400)
 
     items, total = request_mgr.list_requests(status=status, sort=sort, limit=limit, offset=offset)
 
-    def to_json(r: BookingRequest):
-        return {
-            "id": r.id,
-            "status": r.status,
-            "created_at": r.created_at.isoformat() if getattr(r, 'created_at', None) else None,
-            "event_address": r.event_address,
-            "event_lat": getattr(r, 'event_lat', None),
-            "event_lon": getattr(r, 'event_lon', None),
-            "price_min": getattr(r, 'price_min', None),
-            "price_max": getattr(r, 'price_max', None),
-            "num_available_artists": getattr(r, 'num_available_artists', None),
-        }
-
     return jsonify({
-        "items": [to_json(r) for r in items],
+        "items": [request_brief_json(r) for r in items],
         "total": total,
         "limit": limit,
         "offset": offset,
@@ -79,10 +177,30 @@ def list_requests_admin():
 @booking_bp.route('/requests', methods=['POST'])
 @swag_from('../resources/swagger/requests_post.yml')
 def create_request():
-    """Erstellt eine neue Buchungsanfrage und berechnet eine Preisspanne."""
+    """Create a new booking request and calculate a price range."""
     try:
         data = request.get_json(force=True)
         current_app.logger.debug("create_request payload: %s", data)
+
+        # --- Simple per-IP rate limiting (5 req/hour)
+        ip = _client_ip()
+        if not _rate_limit_allow(ip):
+            return error_response("rate_limited", "Too many requests. Try again later.", 429)
+
+        # --- Idempotency-Key support (prevent duplicate creations on reload)
+        idem_key = request.headers.get('Idempotency-Key')
+        cached = _idempotency_lookup(idem_key) if idem_key else None
+        if cached is not None:
+            resp = jsonify(cached)
+            resp.status_code = 201
+            resp.headers["Location"] = cached.get("_location", "")
+            resp.headers["Idempotent-Replay"] = "true"
+            return resp
+
+        # --- Validation
+        ok, err = validate_create_request_payload(data)
+        if not ok:
+            return error_response("validation_error", err, 400)
 
         # Team-Größe normalisieren: Zahlen oder Strings wie "solo"/"duo" akzeptieren
         raw_team_size = data.get('team_size')
@@ -98,14 +216,24 @@ def create_request():
                 try:
                     team_size = int(raw_team_size)
                 except ValueError:
-                    return jsonify({'error': 'Invalid team_size'}), 400
+                    return error_response("validation_error", "Invalid team_size", 400)
         else:
             team_size = raw_team_size
 
-        disciplines = data.get('disciplines', [])
+        # Disciplines normalization and validation
+        raw_disc = data.get('disciplines')
+        if raw_disc is None:
+            disciplines = []
+        elif isinstance(raw_disc, list):
+            disciplines = raw_disc
+        else:
+            return error_response("validation_error", "disciplines must be a list", 400)
+
         event_date = data['event_date']  # will raise KeyError if missing
-        artist_objs = artist_mgr.get_artists_by_discipline(disciplines, event_date)
-        # Für die UI: kompaktes Matched-Payload (max. 5 Artists)
+        artist_objs = artist_mgr.get_artists_by_discipline(disciplines, event_date) or []
+        # Filter only approved artists
+        artist_objs = [a for a in artist_objs if getattr(a, 'approval_status', '') == 'approved']
+        # Für die UI: kompaktes Matched-Payload (max. MAX_MATCHED_ARTISTS Artists)
         matched_payload = [
             {
                 "id": getattr(a, 'id', None),
@@ -113,7 +241,7 @@ def create_request():
                 "price_min": getattr(a, 'price_min', None),
                 "price_max": getattr(a, 'price_max', None),
             }
-            for a in (artist_objs[:5] if artist_objs else [])
+            for a in (artist_objs[:MAX_MATCHED_ARTISTS] if artist_objs else [])
         ]
         req = request_mgr.create_request(
             client_name       = data['client_name'],
@@ -144,7 +272,7 @@ def create_request():
             pmin = None
             pmax = None
         else:
-            fee_pct = float(current_app.config.get("AGENCY_FEE_PERCENT", 20))
+            fee_pct = _config_fee_pct()
             event_city = data.get('event_address', '').split(',')[-1].strip().lower()
             external_artists = [
                 a for a in artist_objs
@@ -175,27 +303,31 @@ def create_request():
             # soll die Preisfunktion NICHT erneut pro Person mitteln/skalieren.
             team_size_for_calc = 1 if (team_size == 2 and base_min is not None and duo_min is not None) else team_size
 
-            if base_min is not None:
-                args = {
-                    'base_min': base_min,
-                    'base_max': base_max,
-                    'distance_km': travel_distance,
-                    'fee_pct': fee_pct,
-                    'newsletter': req.newsletter_opt_in,
-                    'event_type': req.event_type,
-                    'num_guests': req.number_of_guests,
-                    'is_weekend': req.event_date.weekday() >= 5,
-                    'is_indoor': req.is_indoor,
-                    'needs_light': req.needs_light,
-                    'needs_sound': req.needs_sound,
-                    'show_discipline': req.show_discipline,
-                    'team_size': team_size_for_calc,
-                    'team_count': (2 if team_size == 2 else (team_size if team_size and int(team_size) >= 1 else 1)),
-                    'duration': req.duration_minutes,
-                    'event_address': req.event_address
-                }
-                pmin, pmax = calculate_price(**args)
-            else:
+            try:
+                if base_min is not None:
+                    args = {
+                        'base_min': base_min,
+                        'base_max': base_max,
+                        'distance_km': travel_distance,
+                        'fee_pct': fee_pct,
+                        'newsletter': req.newsletter_opt_in,
+                        'event_type': req.event_type,
+                        'num_guests': req.number_of_guests,
+                        'is_weekend': req.event_date.weekday() >= 5,
+                        'is_indoor': req.is_indoor,
+                        'needs_light': req.needs_light,
+                        'needs_sound': req.needs_sound,
+                        'show_discipline': req.show_discipline,
+                        'team_size': team_size_for_calc,
+                        'team_count': (2 if team_size == 2 else (team_size if team_size and int(team_size) >= 1 else 1)),
+                        'duration': req.duration_minutes,
+                        'event_address': req.event_address
+                    }
+                    pmin, pmax = calculate_price(**args)
+                else:
+                    pmin = pmax = None
+            except Exception as e:
+                current_app.logger.exception("calculate_price failed: %s", e)
                 pmin = pmax = None
 
             # In die DB schreiben
@@ -236,51 +368,62 @@ def create_request():
         if team_size and int(team_size) >= 3:
             resp['group_pricing_pending'] = True
 
-        return jsonify(resp), 201
+        location_value = f"/api/requests/requests/{req.id}"
+        resp["_location"] = location_value  # internal for idempotent replays
+
+        # Cache the response if an Idempotency-Key was provided
+        if idem_key:
+            _idempotency_store(idem_key, resp)
+
+        response = jsonify(resp)
+        response.status_code = 201
+        response.headers["Location"] = location_value
+        if idem_key:
+            response.headers["Idempotent-Replay"] = "false"
+        return response
 
     except KeyError as ke:
         current_app.logger.warning("Missing field in create_request: %s", ke)
-        return jsonify({'error': 'missing_field', 'details': str(ke)}), 400
+        return error_response("missing_field", f"Missing field: {str(ke)}", 400)
     except Exception as e:
         current_app.logger.exception("Error in create_request")
-        return jsonify({'error': 'internal_server_error', 'details': str(e)}), 500
+        return error_response("internal_error", f"create_request failed: {str(e)}", 500)
 
 
 @booking_bp.route('/requests/<int:req_id>/offer', methods=['PUT'])
 @jwt_required()
 @swag_from('../resources/swagger/requests_offer_put.yml')
 def set_offer(req_id):
-    """Ermöglicht einem eingeloggten Artist, ein Angebot für eine Anfrage abzugeben."""
+    """Allow a logged-in artist to submit an offer for a request."""
     # Ermittle internen Artist anhand der Supabase JWT Identity
     supabase_id = get_jwt_identity()
     current_app.logger.debug(">>> Supabase ID aus Token: %s", supabase_id)
     user = Artist.query.filter_by(supabase_user_id=supabase_id).first()
-    current_app.logger.debug(">>> Supabase ID aus Token: %s", supabase_id)
     if not user:
-        return jsonify({'error':'Not allowed'}), 403
+        return error_response("forbidden", "Artist not found or not allowed", 403)
     user_id = user.id
 
     req = request_mgr.get_request(req_id)
     # Zugriff prüfen: Nur beteiligte Artists oder Admins dürfen bieten
     if not req or (user_id not in [a.id for a in req.artists] and not user.is_admin):
-        return jsonify({'error':'Not allowed'}), 403
+        return error_response("forbidden", "Not allowed to offer on this request", 403)
 
     data = request.json
     artist_gage = data.get('artist_gage')
     if artist_gage is None:
-        return jsonify({'error': 'artist_gage is required'}), 400
+        return error_response("validation_error", "artist_gage is required", 400)
 
     # Neue Basis berechnen: Preis des aktuellen Artists ersetzen
     base_min = sum(
-        artist_gage if a.id == user_id else a.price_min
+        artist_gage if a.id == user_id else getattr(a, 'price_min', 0)
         for a in req.artists
     )
     base_max = sum(
-        artist_gage if a.id == user_id else a.price_max
+        artist_gage if a.id == user_id else getattr(a, 'price_max', 0)
         for a in req.artists
     )
 
-    fee_pct = float(current_app.config.get("AGENCY_FEE_PERCENT", 20))
+    fee_pct = _config_fee_pct()
     pmin, pmax = calculate_price(
         base_min       = base_min,
         base_max       = base_max,
@@ -324,34 +467,36 @@ def set_offer(req_id):
 @booking_bp.route('/requests/<int:req_id>/accept', methods=['PUT'])
 @jwt_required()
 def accept_request(req_id: int):
+    """Set a booking request status to 'accepted'."""
     try:
         updated = request_mgr.change_status(req_id, 'akzeptiert')
         if not updated:
-            return jsonify({"error": "not_found_or_invalid_status"}), 404
+            return error_response("not_found", "Request not found or invalid status", 404)
         return jsonify({"ok": True, "id": updated.id, "status": updated.status})
     except Exception as e:
         current_app.logger.exception(f"accept_request failed for id={req_id}: {e}")
-        return jsonify({"error": "accept_failed"}), 500
+        return error_response("internal_error", f"accept_request failed: {str(e)}", 500)
 
 @booking_bp.route('/requests/<int:req_id>', methods=['DELETE'])
 @jwt_required()
 def delete_request(req_id: int):
+    """Delete a booking request by ID."""
     try:
         ok = request_mgr.delete(req_id)
         if not ok:
-            return jsonify({"error": "not_found"}), 404
+            return error_response("not_found", "Request not found", 404)
         return jsonify({"ok": True, "deleted_id": req_id})
     except Exception as e:
         current_app.logger.exception(f"delete_request failed for id={req_id}: {e}")
-        return jsonify({"error": "delete_failed"}), 500
+        return error_response("internal_error", f"delete_request failed: {str(e)}", 500)
 
 def send_push(artist, message):
-    """Protokolliert eine Push-Nachricht an einen Artist."""
+    """Log a push notification for an artist (placeholder)."""
     current_app.logger.info(f"PUSH to {artist.id}: {message}")
 
 
 def build_artist_new_request_email(artist, req):
-    """Return a minimal HTML email for a new booking request."""
+    """Build a minimal HTML email for a new booking request."""
     app_url = current_app.config.get('APP_URL', 'https://app.example.com')
     date_str = req.event_date.strftime('%d.%m.%Y') if isinstance(req.event_date, datetime) else str(req.event_date)
     city = (req.event_address.split(',')[-1].strip() if req.event_address else '')
@@ -388,14 +533,14 @@ def build_artist_new_request_email(artist, req):
 
 
 def send_email(to_email: str, subject: str, html: str) -> bool:
-    """Send a simple HTML email using SMTP settings from Flask config.
-
+    """Send an HTML email using SMTP settings from Flask config.
+    
     Required config keys:
       - SMTP_HOST
       - SMTP_PORT (default 587)
       - SMTP_USER
       - SMTP_PASSWORD
-      - SMTP_FROM (fallbacks to SMTP_USER)
+      - SMTP_FROM (defaults to SMTP_USER)
     """
     host = current_app.config.get('SMTP_HOST')
     port = int(current_app.config.get('SMTP_PORT', 587))

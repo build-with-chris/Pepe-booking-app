@@ -24,24 +24,24 @@ def test_admin_invalid_status_param(client, admin_headers):
 
 def test_admin_approve_artist_flow(client, admin_headers, artist_pending):
     # Approve
-    resp = client.post(f"/admin/artists/{artist_pending.id}/approve", headers=admin_headers)
+    resp = client.post(f"/admin/artists/{artist_pending}/approve", headers=admin_headers)
     assert resp.status_code == 200
     payload = resp.get_json()
     assert payload["status"] == "approved"
 
     # DB check
-    updated = Artist.query.get(artist_pending.id)
+    updated = Artist.query.get(artist_pending)
     assert updated.approval_status == "approved"
 
     # Idempotenz: nochmal approve -> weiterhin approved
-    resp2 = client.post(f"/admin/artists/{artist_pending.id}/approve", headers=admin_headers)
+    resp2 = client.post(f"/admin/artists/{artist_pending}/approve", headers=admin_headers)
     assert resp2.status_code == 200
     assert resp2.get_json()["status"] == "approved"
 
 def test_admin_reject_artist_flow(client, admin_headers, artist_pending):
     reason = {"reason": "Profil unvollständig"}
     resp = client.post(
-        f"/admin/artists/{artist_pending.id}/reject",
+        f"/admin/artists/{artist_pending}/reject",
         headers=admin_headers,
         data=json.dumps(reason),
         content_type="application/json",
@@ -52,7 +52,7 @@ def test_admin_reject_artist_flow(client, admin_headers, artist_pending):
     assert data["rejection_reason"] == "Profil unvollständig"
 
     # DB check
-    updated = Artist.query.get(artist_pending.id)
+    updated = Artist.query.get(artist_pending)
     assert updated.approval_status == "rejected"
     assert updated.rejection_reason == "Profil unvollständig"
 

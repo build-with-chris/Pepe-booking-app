@@ -1,71 +1,93 @@
-swagger: "2.0"
-info:
-  title: Offer eines Artists (GET/PUT)
-  version: "1.0"
-  description: >
-    GET: Holt das eigene Angebot zu einer Anfrage.
-    PUT: Speichert/aktualisiert die eigene Gage und setzt den Status auf 'angeboten'.
-tags:
-  - Requests
-securityDefinitions:
-  bearerAuth:
-    type: apiKey
-    name: Authorization
-    in: header
-paths:
-  /requests/requests/{req_id}/offer:
-    get:
-      tags: [Requests]
-      security: [{ bearerAuth: [] }]
-      summary: Eigenes Angebot abrufen
-      parameters:
-        - name: req_id
-          in: path
-          required: true
-          type: integer
-          example: 101
-      responses:
-        200:
-          description: OK
+get:
+  tags: [Requests]
+  security:
+    - bearerAuth: []
+  summary: Get my offer for a booking request
+  parameters:
+    - in: path
+      name: req_id
+      required: true
+      description: Booking request ID
+      schema:
+        type: integer
+  responses:
+    200:
+      description: Current offer
+      content:
+        application/json:
           schema:
             type: object
             properties:
-              price_offered: { type: number, example: 1800 }
-              status: { type: string, example: "angeboten" }
-        403:
-          description: Artist not approved yet / Current user not linked to an artist
-        404:
-          description: Offer not found or not permitted
-    put:
-      tags: [Requests]
-      security: [{ bearerAuth: [] }]
-      summary: Eigenes Angebot setzen/aktualisieren
-      consumes: [application/json]
-      parameters:
-        - name: req_id
-          in: path
-          required: true
-          type: integer
-          example: 101
-        - name: body
-          in: body
-          required: true
+              price_offered:
+                type: number
+                example: 1800
+              status:
+                type: string
+                example: offered
+    403:
+      description: Artist not approved yet or current user not linked to an artist
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    404:
+      description: Offer not found or not permitted
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+put:
+  tags: [Requests]
+  security:
+    - bearerAuth: []
+  summary: Set or update my offer for a booking request
+  parameters:
+    - in: path
+      name: req_id
+      required: true
+      description: Booking request ID
+      schema:
+        type: integer
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required: [price_offered]
+          properties:
+            price_offered:
+              type: number
+              example: 1800
+  responses:
+    200:
+      description: Offer saved
+      content:
+        application/json:
           schema:
             type: object
-            required: [price_offered]
             properties:
-              price_offered: { type: number, example: 1800 }
-      responses:
-        200:
-          description: OK
+              price_offered:
+                type: number
+                example: 1800
+              status:
+                type: string
+                example: offered
+    400:
+      description: price_offered is required
+      content:
+        application/json:
           schema:
-            type: object
-            properties:
-              price_offered: { type: number, example: 1800 }
-              status: { type: string, example: "angeboten" }
-        400:
-          description: price_offered is required
-        403:
-          description: Artist not approved yet / Current user not linked to an artist
-        500:
-          description: Failed to set offer
+            $ref: '#/components/schemas/Error'
+    403:
+      description: Artist not approved yet or current user not linked to an artist
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    500:
+      description: Failed to set offer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

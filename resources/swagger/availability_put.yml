@@ -64,3 +64,59 @@ responses:
           type: string
         details:
           type: string
+tags:
+  - Availability
+security:
+  - bearerAuth: []
+summary: Replace availability dates
+description: Synchronize the current artist's availability with the given list of ISO dates (YYYY-MM-DD). Adds new dates and removes missing ones.
+requestBody:
+  required: true
+  content:
+    application/json:
+      schema:
+        type: object
+        required: [dates]
+        properties:
+          dates:
+            type: array
+            description: List of dates that should be available after sync
+            items:
+              type: string
+              format: date
+responses:
+  200:
+    description: Sync result
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            added:
+              type: array
+              description: IDs of created availability slots
+              items:
+                type: integer
+            removed:
+              type: array
+              description: IDs of removed availability slots
+              items:
+                type: integer
+  400:
+    description: Validation error
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  403:
+    description: Forbidden or no linked artist
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  500:
+    description: Internal server error
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'

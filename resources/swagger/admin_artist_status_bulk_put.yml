@@ -1,45 +1,56 @@
 tags:
   - AdminArtistStatus
-summary: Setzt den Status für alle oder eine Liste von Artists in einer Anfrage
-description: Ohne Angabe von artist_ids wird der Status für **alle** Artists der Anfrage gesetzt.
 security:
-  - Bearer: []
+  - bearerAuth: []
+summary: Set artist status for all or a list of artists in a request
+description: If no artist_ids are provided, the status is applied to **all** artists of the request. Admin only.
 parameters:
   - in: path
     name: req_id
-    type: integer
     required: true
-    description: ID der Booking-Request
-  - in: body
-    name: body
-    required: true
+    description: Booking request ID
     schema:
-      type: object
-      required: [status]
-      properties:
-        status:
-          type: string
-          enum: [angefragt, angeboten, akzeptiert, abgelehnt, storniert]
-        artist_ids:
-          type: array
-          items:
-            type: integer
-          description: Optionale Liste von Artist-IDs. Wenn nicht vorhanden, wird für alle gesetzt.
-consumes:
-  - application/json
+      type: integer
+requestBody:
+  required: true
+  content:
+    application/json:
+      schema:
+        type: object
+        required: [status]
+        properties:
+          status:
+            type: string
+            description: New status to apply
+            enum: [requested, offered, accepted, rejected, cancelled]
+          artist_ids:
+            type: array
+            description: Optional list of artist IDs to update; if omitted, all artists in the request are updated
+            items:
+              type: integer
 responses:
   200:
-    description: Anzahl aktualisierter Artists und neuer Status
-    schema:
-      type: object
-      properties:
-        updated:
-          type: integer
-        status:
-          type: string
-          enum: [angefragt, angeboten, akzeptiert, abgelehnt, storniert]
+    description: Number of updated artists and the new status
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            updated:
+              type: integer
+              description: Count of artists updated
+            status:
+              type: string
+              enum: [requested, offered, accepted, rejected, cancelled]
   400:
-    description: Ungültige Nutzlast
+    description: Validation error
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
   403:
-    description: Nicht erlaubt
-
+    description: Forbidden – admin only
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'

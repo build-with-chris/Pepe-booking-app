@@ -70,12 +70,12 @@ class AdminOfferManager:
     # --- Admin: Artist-Freigaben ---
     def approve_artist(self, artist_id: int, admin_id: int | None = None):
         """Setzt den Artist auf 'approved' und speichert Admin/Datum (ohne Model-Methoden)."""
-        artist = db.session.get(Artist, artist_id)  # SQLAlchemy 2.0 Weg
+        artist = db.session.get(Artist, artist_id)
         if not artist:
             logger.warning("approve_artist: artist not found (id=%r)", artist_id)
             return None
 
-        # idempotent
+        # idempotent: already approved
         if getattr(artist, "approval_status", None) == "approved":
             logger.info("approve_artist: already approved (id=%s)", artist_id)
             return artist
@@ -85,26 +85,19 @@ class AdminOfferManager:
             if hasattr(artist, "rejection_reason"):
                 artist.rejection_reason = None
 
-            # approved_by NUR setzen, wenn wir eine int-ID haben
             if hasattr(artist, "approved_by"):
-                if isinstance(admin_id, int):
-                    artist.approved_by = admin_id
-                else:
-                    # wenn Spalte nullable ist: None; sonst gar nicht setzen
-                    artist.approved_by = None
+                artist.approved_by = admin_id if isinstance(admin_id, int) else None
 
             if hasattr(artist, "approved_at"):
                 artist.approved_at = datetime.now(timezone.utc)
 
             db.session.commit()
-            logger.info("Artist approved: id=%s by admin_id=%s", artist_id, admin_id)
+            logger.info("Artist approved: id=%s by admin_id=%s", artist.id, admin_id)
 
-            # Nach Freigabe: 365 Tage Verfügbarkeit idempotent auffüllen
             try:
-                AvailabilityManager().ensure_auto_availability_for_artist(artist_id, days_ahead=365)
+                AvailabilityManager().ensure_auto_availability_for_artist(artist.id, days_ahead=365)
             except Exception as e:
-                # Approval nicht zurückrollen – nur loggen
-                logger.exception("Auto-availability fill failed for artist_id=%s: %s", artist_id, e)
+                logger.exception("Auto-availability fill failed for artist_id=%s: %s", artist.id, e)
 
             return artist
         except Exception as e:
@@ -131,14 +124,13 @@ class AdminOfferManager:
             if hasattr(artist, "rejection_reason"):
                 artist.rejection_reason = reason
 
-            # Felder leeren, falls vorhanden
             if hasattr(artist, "approved_by"):
                 artist.approved_by = None
             if hasattr(artist, "approved_at"):
                 artist.approved_at = None
 
             db.session.commit()
-            logger.info("Artist rejected: id=%s by admin_id=%s reason=%r", artist_id, admin_id, reason)
+            logger.info("Artist rejected: id=%s by admin_id=%s reason=%r", artist.id, admin_id, reason)
             return artist
         except Exception as e:
             logger.exception("reject_artist failed (id=%s): %s", artist_id, e)

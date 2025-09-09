@@ -1,0 +1,36 @@
+tags:
+  - Artists
+security:
+  - bearerAuth: []
+summary: Accept guidelines for my artist profile
+description: Marks the current user's artist profile as having accepted the guidelines. No request body required.
+responses:
+  200:
+    description: Guidelines accepted
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            ok:
+              type: boolean
+              example: true
+            artist_id:
+              type: integer
+              example: 123
+            accepted_at:
+              type: string
+              format: date-time
+              example: "2025-09-09T12:34:56Z"
+  403:
+    description: Current user not linked to an artist
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  500:
+    description: Internal server error
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'

@@ -1,40 +1,61 @@
 tags:
   - AdminOffers
 security:
-  - Bearer: []
-description: |
-  Aktualisiert ein bestehendes Admin-Angebot.
+  - bearerAuth: []
+summary: Update an admin offer
+description: Update fields of an admin-created offer. Admin only.
 parameters:
-  - name: offer_id
-    in: path
+  - in: path
+    name: offer_id
     required: true
-    type: integer
-    description: ID des Admin-Angebots
-  - name: body
-    in: body
-    required: true
+    description: Admin offer ID
     schema:
-      type: object
-      properties:
-        override_price:
-          type: integer
-          description: Neuer Gesamtpreis (optional)
-        notes:
-          type: string
-          description: Aktualisierte Notiz (optional)
+      type: integer
+requestBody:
+  required: true
+  content:
+    application/json:
+      schema:
+        type: object
+        properties:
+          override_price:
+            type: integer
+            description: Manually set total price (in cents)
+          notes:
+            type: string
+            description: Optional notes for the offer
 responses:
   200:
-    description: Admin-Angebot erfolgreich aktualisiert
-    schema:
-      type: object
-      properties:
-        id:
-          type: integer
-        override_price:
-          type: integer
-        notes:
-          type: string
+    description: Admin offer updated
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            id:
+              type: integer
+            override_price:
+              type: integer
+            notes:
+              type: string
+            updated_at:
+              type: string
+              format: date-time
+  400:
+    description: Validation error
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
   403:
-    description: Forbidden – nur Admins dürfen
+    description: Forbidden – admin only
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
   404:
-    description: Not Found – Angebot existiert nicht
+    description: Offer not found
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'

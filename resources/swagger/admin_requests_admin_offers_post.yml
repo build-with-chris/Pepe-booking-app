@@ -1,38 +1,49 @@
 tags:
   - AdminOffers
 security:
-  - Bearer: []
-description: |
-  Legt ein neues Admin-Angebot für eine Booking-Request an.
+  - bearerAuth: []
+summary: Create an admin offer for a booking request
+description: Creates a new admin-managed offer for the specified booking request. Admin only.
 parameters:
   - name: req_id
     in: path
     required: true
-    type: integer
-    description: ID der Booking-Anfrage
-  - name: body
-    in: body
-    required: true
+    description: Booking request ID
     schema:
-      type: object
-      required:
-        - override_price
-      properties:
-        override_price:
-          type: integer
-          description: Manuell festgelegter Gesamtpreis
-        notes:
-          type: string
-          description: Optionaler Kommentar zum Angebot
+      type: integer
+requestBody:
+  required: true
+  content:
+    application/json:
+      schema:
+        type: object
+        required: [override_price]
+        properties:
+          override_price:
+            type: integer
+            description: Manually set total price (in cents)
+          notes:
+            type: string
+            description: Optional notes for the offer
 responses:
   201:
-    description: Admin-Angebot erfolgreich erstellt
-    schema:
-      type: object
-      properties:
-        id:
-          type: integer
+    description: Admin offer created
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            id:
+              type: integer
   400:
-    description: Bad Request – override_price fehlt
+    description: Validation error (e.g., override_price missing)
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
   403:
-    description: Forbidden – nur Admins dürfen
+    description: Forbidden – admin only
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'

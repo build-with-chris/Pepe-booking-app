@@ -14,6 +14,9 @@ from sqlalchemy import text
 
 import logging
 import os
+import yaml
+
+from helpers.http_responses import error_response
 
 
 
@@ -46,7 +49,7 @@ migrate = Migrate(app, db)
 
 @app.before_request
 def _skip_jwt_for_options():
-    """Ermöglicht CORS-Preflight (OPTIONS) ohne JWT-Header."""
+    """Allow CORS preflight (OPTIONS) without requiring a JWT."""
     if request.method == 'OPTIONS':
         return jsonify(), 200
 
@@ -57,35 +60,84 @@ app.register_blueprint(booking_bp)
 
 jwt = JWTManager(app)
 
+CORS(app)
+
 template = {
-"swagger": "2.0",
-"info": {
-    "title": "Pepe Backend API",
-    "description": "This Api provides Endpoint for Artists to edit their availability, "
-    "provides auth login and enables requests for the client",
-        "version": "1.0"
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Pepe Backend API",
+        "description": (
+            "This API provides endpoints for artists to manage availability, "
+            "authentication, and client booking requests."
+        ),
+        "version": "1.0.0",
     },
-    "securityDefinitions": {
-        "Bearer": {
-            "type": "apiKey",
-            "name": "Authorization",
-            "in": "header",
-            "description": "JWT Authorization header using the Bearer scheme. Example: 'Authorization: Bearer <token>'"
+    "components": {
+        "securitySchemes": {
+            "bearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+                "description": "JWT Authorization header using the Bearer scheme. Example: 'Authorization: Bearer <token>'",
+            }
         }
     },
-    "security": [
-        {
-            "Bearer": []
-        }
-    ]
-}
-app.config['SWAGGER'] = {
-    'title': "Pepe Backend API",
-    'uiversion': 2
+    "security": [{"bearerAuth": []}],
 }
 
-Swagger(app, template=template)
-CORS(app)
+# --- Merge shared OpenAPI component schemas -----------------------------------
+try:
+    BASE_DIR = os.path.dirname(__file__)
+    SCHEMAS_PATH = os.path.join(BASE_DIR, 'resources', 'swagger', 'components', 'schemas.yml')
+    if os.path.exists(SCHEMAS_PATH):
+        with open(SCHEMAS_PATH, 'r', encoding='utf-8') as f:
+            schemas_doc = yaml.safe_load(f) or {}
+        # schemas_doc should look like { components: { schemas: { ... } } }
+        shared_schemas = (
+            schemas_doc.get('components', {}).get('schemas', {})
+            if isinstance(schemas_doc, dict) else {}
+        )
+        if shared_schemas:
+            template.setdefault('components', {})
+            template['components'].setdefault('schemas', {})
+            # extend without overwriting existing keys
+            template['components']['schemas'].update(shared_schemas)
+except Exception as e:
+    app.logger.exception('Failed to load shared OpenAPI schemas: %s', e)
+# -----------------------------------------------------------------------------
+
+app.config['SWAGGER'] = {
+    'title': "Pepe Backend API",
+    'uiversion': 3,
+    # Load ONLY the cleaned spec; do not expose/raw-bind any internal specs
+    'urls': [
+        { 'name': 'Pepe API', 'url': '/apispec_1.json' }
+    ],
+    'specs': [],
+    'specs_route': '/api-docs',
+    'ui_params': {
+        'validatorUrl': None,
+        'docExpansion': 'none',
+        'persistAuthorization': True
+    }
+}
+
+# Serve Swagger UI at /api-docs (also generates /apispec_raw.json)
+swagger = Swagger(app, template=template, parse=False)
+
+# Serve OpenAPI 3 spec at /apispec_1.json, stripping accidental Swagger 2 key if present
+@app.get('/apispec_1.json')
+def patched_apispec():
+    """Return OpenAPI 3 spec; drop accidental Swagger 2 'swagger' field if present."""
+    try:
+        specs = swagger.loader()
+        # If flasgger (or a fragment) injected a Swagger 2 key, remove it to keep UI happy.
+        if isinstance(specs, dict) and 'openapi' in specs and 'swagger' in specs:
+            specs.pop('swagger', None)
+        return jsonify(specs)
+    except Exception as e:
+        app.logger.exception('Failed to build OpenAPI spec: %s', e)
+        return error_response('openapi_error', str(e), 500)
 
 
 # Debug route for DB config
@@ -105,7 +157,7 @@ def healthz():
         return jsonify({"status": "ok"}), 200
     except Exception as e:
         app.logger.exception("Health check failed: %s", e)
-        return jsonify({"status": "db_unavailable", "error": str(e)}), 503
+        return error_response("internal_error", f"DB unavailable: {str(e)}", 503)
 
 
 if __name__=="__main__":

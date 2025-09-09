@@ -1,28 +1,21 @@
-swagger: "2.0"
-info:
-  title: Eigene Booking-Requests abrufen
-  version: "1.0"
-  description: Gibt die für den eingeloggten (freigegebenen) Artist relevanten Anfragen zurück.
 tags:
   - Requests
-securityDefinitions:
-  bearerAuth:
-    type: apiKey
-    name: Authorization
-    in: header
-paths:
-  /requests/requests:
-    get:
-      tags: [Requests]
-      security: [{ bearerAuth: [] }]
-      summary: Eigene Anfragen (mit Empfehlung)
-      responses:
-        200:
-          description: OK
-          schema:
-            type: array
-            items:
-              type: object
-              description: "Struktur wie von get_requests_for_artist_with_recommendation geliefert"
-        403:
-          description: Artist not approved yet / Current user not linked to an artist
+security:
+  - bearerAuth: []
+summary: List booking requests for the current artist
+description: Returns booking requests relevant to the authenticated (approved) artist, including recommendations.
+responses:
+  200:
+    description: OK
+    content:
+      application/json:
+        schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookingRequest'
+  403:
+    description: Artist not approved or current user not linked to an artist
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'

@@ -1,0 +1,44 @@
+
+
+tags:
+  - Artists
+security:
+  - bearerAuth: []
+summary: Submit my profile for review
+description: Sets the current artist's approval_status to 'pending' (unless already approved). No request body required.
+responses:
+  200:
+    description: Profile submitted for review
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 123
+            status:
+              type: string
+              example: pending
+            submitted_at:
+              type: string
+              format: date-time
+              example: "2025-09-09T12:34:56Z"
+  403:
+    description: Current user not linked to an artist
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  409:
+    description: Already approved – cannot submit again
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  500:
+    description: Internal server error
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'

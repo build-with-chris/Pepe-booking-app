@@ -9,6 +9,7 @@ from managers.booking_requests_manager import BookingRequestManager
 from models import Availability, Discipline, db
 from sqlalchemy import func
 import logging
+from helpers.http_responses import error_response
 
 from datetime import datetime
 
@@ -82,7 +83,7 @@ def get_current_user():
 @api_bp.route('/artists', methods=['GET'])
 @swag_from('../resources/swagger/artists_get.yml')
 def list_artists():
-    """Gibt alle Artists als JSON-Liste zurück."""
+    """Return all approved artists as JSON list."""
     # Nur freigegebene Artists öffentlich listen
     artists = artist_mgr.get_approved_artists()
     return jsonify([{
@@ -105,15 +106,15 @@ def list_artists():
 @jwt_required()
 @swag_from('../resources/swagger/artists_post.yml')
 def create_artist():
-    """Legt einen neuen Artist mit den übergebenen Daten an."""
+    """Create a new artist with the provided data."""
     try:
         current_user_id = get_jwt_identity()
         data = request.json or {}
         disciplines = data.get('disciplines')
         if not disciplines:
-            return jsonify({'error': 'Disciplines must be provided!'}), 400
+            return error_response('validation_error', 'Disciplines must be provided', 400)
         if artist_mgr.get_artist_by_email(data.get('email', '')):
-            return jsonify({'error': 'Email already exists'}), 409
+            return error_response('conflict', 'Email already exists', 409)
 
         artist = artist_mgr.create_artist(
             name=data['name'],
@@ -130,11 +131,11 @@ def create_artist():
         return jsonify({'id': artist.id}), 201
     except ValueError as ve:
         if 'email already exists' in str(ve).lower():
-            return jsonify({'error': 'Email already exists'}), 409
-        return jsonify({'error': str(ve)}), 400
+            return error_response('conflict', 'Email already exists', 409)
+        return error_response('validation_error', str(ve), 400)
     except Exception as e:
         logger.exception('Failed to create artist')
-        return jsonify({'error': 'Failed to create artist', 'details': str(e)}), 500
+        return error_response('internal_error', f'Failed to create artist: {str(e)}', 500)
 
 
 # Own artist profile: read
@@ -143,10 +144,10 @@ def create_artist():
 @jwt_required()
 @swag_from('../resources/swagger/artists_me_get.yml')
 def get_my_artist():
-    """Liefert das eigene Artist-Profil (inkl. Bild & Bio) der eingeloggten Person."""
+    """Return the current user's artist profile including image and bio."""
     user_id, artist = get_current_user()
     if not artist:
-        return jsonify({'error': 'Current user not linked to an artist'}), 403
+        return error_response('forbidden', 'Current user not linked to an artist', 403)
     return jsonify({
         'id': artist.id,
         'name': artist.name,
@@ -172,10 +173,10 @@ def get_my_artist():
 @jwt_required()
 @swag_from('../resources/swagger/artists_me_accept_guidelines_post.yml', validation=False)
 def accept_my_guidelines():
-    """Marks the current artist as having accepted the guidelines (boolean flag)."""
+    """Mark the current artist as having accepted the guidelines."""
     user_id, artist = get_current_user()
     if not artist:
-        return jsonify({'error': 'Current user not linked to an artist'}), 403
+        return error_response('forbidden', 'Current user not linked to an artist', 403)
     try:
         # Accept multiple possible column names for forward/backward compatibility
         if hasattr(artist, 'guidelines_accepted'):
@@ -190,7 +191,7 @@ def accept_my_guidelines():
     except Exception as e:
         logger.exception('Failed to set guidelines_accepted')
         db.session.rollback()
-        return jsonify({'error': 'Failed to accept guidelines', 'details': str(e)}), 500
+        return error_response('internal_error', f'Failed to accept guidelines: {str(e)}', 500)
 
 
 # Explizite Freigabe anfordern (Status -> pending)
@@ -198,10 +199,10 @@ def accept_my_guidelines():
 @jwt_required()
 @swag_from('../resources/swagger/artists_me_submit_review_post.yml', validation=False)
 def submit_my_profile_for_review():
-    """Setzt den Freigabe-Status des eingeloggten Artists auf 'pending' (sofern nicht bereits 'approved')."""
+    """Set the current artist's approval status to 'pending' (unless already approved)."""
     user_id, artist = get_current_user()
     if not artist:
-        return jsonify({'error': 'Current user not linked to an artist'}), 403
+        return error_response('forbidden', 'Current user not linked to an artist', 403)
 
     try:
         current_status = (getattr(artist, 'approval_status', 'unsubmitted') or 'unsubmitted').lower()
@@ -218,19 +219,17 @@ def submit_my_profile_for_review():
         }), 200
     except Exception as e:
         logger.exception('Failed to submit profile for review')
-        return jsonify({'error': 'Failed to submit review', 'details': str(e)}), 500
+        return error_response('internal_error', f'Failed to submit review: {str(e)}', 500)
 
 
 @api_bp.route('/artists/me/profile', methods=['PUT', 'PATCH'])
 @jwt_required()
 @swag_from('../resources/swagger/artists_me_profile_put.yml')
 def update_my_profile():
-    """Aktualisiert das Profil des eingeloggten Artists (Name, Adresse, Telefon, Preise, Disziplinen,
-    Profilbild-URL, Bio, Instagram, Galerie-URLs). Optional kann approval_status='pending' gesetzt werden.
-    """
+    """Update the current artist's profile fields (name, address, phone, prices, disciplines, media)."""
     user_id, artist = get_current_user()
     if not artist:
-        return jsonify({'error': 'Current user not linked to an artist'}), 403
+        return error_response('forbidden', 'Current user not linked to an artist', 403)
 
     payload = request.get_json(silent=True) or {}
 
@@ -253,18 +252,18 @@ def update_my_profile():
         img_url, bio, instagram, gallery_urls, req_status
     ]
     if all(v is None for v in updatable_keys):
-        return jsonify({'error': 'Nothing to update'}), 400
+        return error_response('validation_error', 'Nothing to update', 400)
 
     # Validierungen
     if gallery_urls is not None:
         if not isinstance(gallery_urls, list):
-            return jsonify({'error': 'gallery_urls must be a list of URLs'}), 400
+            return error_response('validation_error', 'gallery_urls must be a list of URLs', 400)
         gallery_urls = [str(u).strip() for u in gallery_urls if isinstance(u, (str, bytes))]
         if len(gallery_urls) > 9:
-            return jsonify({'error': 'gallery_urls may contain at most 9 items'}), 400
+            return error_response('validation_error', 'gallery_urls may contain at most 9 items', 400)
 
     if disciplines is not None and not isinstance(disciplines, list):
-        return jsonify({'error': 'disciplines must be a list of strings'}), 400
+        return error_response('validation_error', 'disciplines must be a list of strings', 400)
 
     try:
         # Primitive Felder
@@ -331,19 +330,14 @@ def update_my_profile():
     except Exception as e:
         logger.exception('Failed to update own profile')
         db.session.rollback()
-        return jsonify({'error': 'Failed to update profile', 'details': str(e)}), 500
+        return error_response('internal_error', f'Failed to update profile: {str(e)}', 500)
 
 
 @api_bp.route('/artists/me/ensure', methods=['POST'])
 @jwt_required()
 @swag_from('../resources/swagger/artists_me_ensure_post.yml', validation=False)
 def ensure_my_artist():
-    """Ensure an Artist row exists & is **linked** for the current Supabase user; return it.
-    Strategy:
-      1) Try by supabase_user_id (fast path)
-      2) If missing: claim an orphan artist with same email (case-insensitive)
-      3) If still missing: create minimal artist (status='unsubmitted') and link it
-    """
+    """Ensure an artist row exists and is linked to the current Supabase user."""
     user_id = get_jwt_identity()
 
     # 1) Direct lookup by UID
@@ -423,7 +417,7 @@ def ensure_my_artist():
             artist = new_artist
         except Exception:
             db.session.rollback()
-            return jsonify({'error': 'Unable to ensure artist for current user'}), 500
+            return error_response('internal_error', 'Unable to ensure artist for current user', 500)
 
     # Return unified payload
     return jsonify({
@@ -451,7 +445,7 @@ def ensure_my_artist():
 def get_artist_by_email(email):
     artist = artist_mgr.get_artist_by_email(email)
     if not artist:
-        return jsonify({'msg': 'Artist not found'}), 404
+        return error_response('not_found', 'Artist not found', 404)
     return jsonify(artist.serialize()), 200
 
 
@@ -459,12 +453,7 @@ def get_artist_by_email(email):
 @jwt_required()
 @swag_from('../resources/swagger/artists_delete.yml')
 def delete_artist(artist_id):
-    """Löscht einen Artist-Eintrag, sofern Berechtigung vorliegt.
-    Erlaubt ist:
-      • Admin (aktueller User)
-      • Eigentümer (artist.supabase_user_id == current_user_id)
-      • Sonderfall: "verwaister" Artist (artist.supabase_user_id is None) mit gleicher E-Mail wie im JWT
-    """
+    """Delete an artist entry if the current user is allowed (admin, owner, or orphan self)."""
     current_user_id = get_jwt_identity()
     claims = get_jwt()
     jwt_email = None
@@ -475,7 +464,7 @@ def delete_artist(artist_id):
 
     artist = artist_mgr.get_artist(artist_id)
     if not artist:
-        return jsonify({'error': 'Not found'}), 404
+        return error_response('not_found', 'Artist not found', 404)
 
     # aktuellen Artist (vom aufrufenden User) laden, um Admin-Status korrekt zu prüfen
     current_artist = artist_mgr.get_artist_by_supabase_user_id(current_user_id)
@@ -485,19 +474,19 @@ def delete_artist(artist_id):
     is_orphan_self = (getattr(artist, 'supabase_user_id', None) is None and jwt_email and getattr(artist, 'email', None) == jwt_email)
 
     if not (is_admin or is_owner or is_orphan_self):
-        return jsonify({'error': 'Forbidden'}), 403
+        return error_response('forbidden', 'Forbidden', 403)
 
     success = artist_mgr.delete_artist(artist_id)
     if success:
         return jsonify({'deleted': artist_id}), 200
-    return jsonify({'error': 'Not found'}), 404
+    return error_response('not_found', 'Artist not found', 404)
 
 
 @api_bp.route('/artists/<int:artist_id>', methods=['PUT', 'PATCH'])
 @jwt_required()
 @swag_from('../resources/swagger/artists_put.yml')
 def update_artist(artist_id):
-    """Aktualisiert einen vorhandenen Artist."""
+    """Update an existing artist profile by ID."""
     try:
         current_user_id = get_jwt_identity()
         current_user = artist_mgr.get_artist_by_supabase_user_id(current_user_id)
@@ -506,9 +495,9 @@ def update_artist(artist_id):
         logger.info(f'Updating artist {artist_id} with data: {data}')
         artist = artist_mgr.get_artist(artist_id)
         if not artist:
-            return jsonify({'error': 'Artist not found'}), 404
+            return error_response('not_found', 'Artist not found', 404)
         if not (getattr(current_user, 'is_admin', False) or artist.supabase_user_id == current_user_id):
-            return jsonify({'error': 'Forbidden'}), 403
+            return error_response('forbidden', 'Forbidden', 403)
         if 'name' in data:
             artist.name = data['name']
         if 'email' in data:
@@ -533,10 +522,10 @@ def update_artist(artist_id):
             val = data.get('gallery_urls')
             if val is not None:
                 if not isinstance(val, list):
-                    return jsonify({'error': 'gallery_urls must be a list of URLs'}), 400
+                    return error_response('validation_error', 'gallery_urls must be a list of URLs', 400)
                 urls = [str(u).strip() for u in val if isinstance(u, (str, bytes))]
                 if len(urls) > 9:
-                    return jsonify({'error': 'gallery_urls may contain at most 9 items'}), 400
+                    return error_response('validation_error', 'gallery_urls may contain at most 9 items', 400)
                 artist.gallery_urls = urls
         if 'disciplines' in data:
             def get_or_create_discipline(name):
@@ -551,7 +540,7 @@ def update_artist(artist_id):
         return jsonify({'id': artist.id}), 200
     except Exception as e:
         logger.exception('Failed to update artist')
-        return jsonify({'error': 'Failed to update artist', 'details': str(e)}), 500
+        return error_response('internal_error', f'Failed to update artist: {str(e)}', 500)
 
 
 # Availability
@@ -560,7 +549,7 @@ def update_artist(artist_id):
 @jwt_required()
 @swag_from('../resources/swagger/availability_get.yml')
 def get_availability():
-    """Gibt alle Verfügbarkeitstage des eingeloggten Artists zurück oder, falls angegeben, eines anderen Artists (mit Berechtigung)."""
+    """Return availability slots for the current artist or another artist if allowed."""
     user_id, current_artist = get_current_user()
     logger.debug(f"get_availability called by supabase_user_id={user_id} with args={request.args}")
 
@@ -568,7 +557,7 @@ def get_availability():
 
     if not current_artist:
         logger.warning(f"Current user {user_id} not linked to an artist (after ensure)")
-        return jsonify({'error': 'Current user not linked to an artist'}), 403
+        return error_response('forbidden', 'Current user not linked to an artist', 403)
 
     target_artist = current_artist
     if artist_id_param:
@@ -579,7 +568,7 @@ def get_availability():
                 # permission: same artist or admin
                 if artist_candidate.id != current_artist.id and not getattr(current_artist, 'is_admin', False):
                     logger.warning(f"User {current_supabase_id} forbidden from viewing availability of artist {artist_candidate.id}")
-                    return jsonify({'error': 'Forbidden'}), 403
+                    return error_response('forbidden', 'Forbidden', 403)
                 target_artist = artist_candidate
             else:
                 logger.warning(f"Artist candidate not found for id {artist_id_int}, falling back to current artist")
@@ -595,7 +584,7 @@ def get_availability():
             slots = avail_mgr.get_availabilities(target_artist.id)
     except Exception as e:
         logger.exception(f"Failed to fetch availabilities for artist {target_artist.id}")
-        return jsonify({'error': 'Failed to fetch availabilities', 'details': str(e)}), 500
+        return error_response('internal_error', f'Failed to fetch availabilities: {str(e)}', 500)
 
     result = [{'id': s.id, 'artist_id': s.artist_id, 'date': s.date.isoformat()} for s in slots]
     logger.debug(f"Returning {len(result)} availability slots for artist {target_artist.id}")
@@ -606,10 +595,10 @@ def get_availability():
 @jwt_required()
 @swag_from('../resources/swagger/availability_post.yml')
 def add_availability():
-    """Fügt einen oder mehrere Verfügbarkeitstage für den eingeloggten Artist hinzu (oder, wenn admin, für einen anderen über artist_id)."""
+    """Add one or more availability slots for the current artist (or another if admin)."""
     user_id, current_artist = get_current_user()
     if not current_artist:
-        return jsonify({'error': 'Current user not linked to an artist'}), 403
+        return error_response('forbidden', 'Current user not linked to an artist', 403)
 
     # resolve target artist (optional override for admin)
     artist_id_param = request.args.get('artist_id')
@@ -618,18 +607,18 @@ def add_availability():
         try:
             artist_id_int = int(artist_id_param)
         except ValueError:
-            return jsonify({'error': 'artist_id must be integer'}), 400
+            return error_response('validation_error', 'artist_id must be integer', 400)
         candidate = artist_mgr.get_artist(artist_id_int)
         if not candidate:
-            return jsonify({'error': 'Artist not found'}), 404
+            return error_response('not_found', 'Artist not found', 404)
         if candidate.id != current_artist.id and not getattr(current_artist, 'is_admin', False):
-            return jsonify({'error': 'Forbidden'}), 403
+            return error_response('forbidden', 'Forbidden', 403)
         target_artist = candidate
 
     artist_id = target_artist.id
     data = request.get_json()
     if not data:
-        return jsonify({'error': 'Date must be provided'}), 400
+        return error_response('validation_error', 'Date must be provided', 400)
 
     def create_slot(item):
         date_str = item.get('date')
@@ -649,16 +638,16 @@ def add_availability():
             for item in data:
                 slots.append(create_slot(item))
         except KeyError:
-            return jsonify({'error': 'Date must be provided'}), 400
+            return error_response('validation_error', 'Date must be provided', 400)
         except ValueError:
-            return jsonify({'error': 'Invalid date format'}), 400
+            return error_response('validation_error', 'Invalid date format', 400)
     else:
         try:
             slots.append(create_slot(data))
         except KeyError:
-            return jsonify({'error': 'Date must be provided'}), 400
+            return error_response('validation_error', 'Date must be provided', 400)
         except ValueError:
-            return jsonify({'error': 'Invalid date format'}), 400
+            return error_response('validation_error', 'Invalid date format', 400)
     return jsonify(slots), 201
 
 
@@ -666,10 +655,10 @@ def add_availability():
 @jwt_required()
 @swag_from('../resources/swagger/availability_put.yml')
 def replace_availability():
-    """Ersetzt die Verfügbarkeiten des eingeloggten Artists komplett mit der übergebenen Liste von dates (oder, wenn admin, eines anderen Artists via artist_id)."""
+    """Replace all availability slots for the current artist (or another if admin)."""
     user_id, current_artist = get_current_user()
     if not current_artist:
-        return jsonify({'error': 'Current user not linked to an artist'}), 403
+        return error_response('forbidden', 'Current user not linked to an artist', 403)
 
     # resolve target artist (optional override for admin)
     artist_id_param = request.args.get('artist_id')
@@ -678,17 +667,17 @@ def replace_availability():
         try:
             artist_id_int = int(artist_id_param)
         except ValueError:
-            return jsonify({'error': 'artist_id must be integer'}), 400
+            return error_response('validation_error', 'artist_id must be integer', 400)
         candidate = artist_mgr.get_artist(artist_id_int)
         if not candidate:
-            return jsonify({'error': 'Artist not found'}), 404
+            return error_response('not_found', 'Artist not found', 404)
         if candidate.id != current_artist.id and not getattr(current_artist, 'is_admin', False):
-            return jsonify({'error': 'Forbidden'}), 403
+            return error_response('forbidden', 'Forbidden', 403)
         target_artist = candidate
 
     data = request.get_json()
     if not data or 'dates' not in data:
-        return jsonify({'error': 'dates list required'}), 400
+        return error_response('validation_error', 'dates list required', 400)
     if artist_id_param:
         result = avail_mgr.replace_availabilities_for_artist(target_artist.id, data['dates'])
     else:
@@ -700,33 +689,33 @@ def replace_availability():
 @jwt_required()
 @swag_from('../resources/swagger/availability_delete.yml')
 def remove_availability(slot_id):
-    """Entfernt einen Verfügbarkeitstag des eingeloggten Artists anhand der ID. Admins können auch andere löschen."""
+    """Remove one availability slot by ID if the user is owner or admin."""
     logger.debug(f"remove_availability called with slot_id={slot_id}")
     user_id, current_artist = get_current_user()
     if not current_artist:
-        return jsonify({'error': 'Current user not linked to an artist'}), 403
+        return error_response('forbidden', 'Current user not linked to an artist', 403)
     slot = Availability.query.get(slot_id)
     if not slot:
-        return jsonify({'error': 'Not found'}), 404
+        return error_response('not_found', 'Availability not found', 404)
     # permission: owner or admin
     if slot.artist_id != current_artist.id and not getattr(current_artist, 'is_admin', False):
-        return jsonify({'error': 'Forbidden'}), 403
+        return error_response('forbidden', 'Forbidden', 403)
     avail_mgr.remove_availability(slot_id)
     return jsonify({'deleted': slot_id})
 @api_bp.route('/requests/requests', methods=['GET'])
 @jwt_required()
 @swag_from('../resources/swagger/booking_requests_get.yml')
 def list_my_booking_requests():
-    """Gibt die für den eingeloggten Artist relevanten BookingRequests zurück (mit Empfehlung)."""
+    """Return booking requests relevant to the current artist (with recommendations)."""
     user_id = get_jwt_identity()
     logger.debug(f"list_my_booking_requests called with supabase_user_id={user_id}")
     artist = artist_mgr.get_artist_by_supabase_user_id(user_id)
     if not artist:
         logger.warning(f"Current user {user_id} not linked to an artist")
-        return jsonify({'error': 'Current user not linked to an artist'}), 403
+        return error_response('forbidden', 'Current user not linked to an artist', 403)
     # Nur freigegebene Artists können Anfragen erhalten/einsehen
     if getattr(artist, 'approval_status', '') != 'approved':
-        return jsonify({'error': 'Artist not approved yet'}), 403
+        return error_response('forbidden', 'Artist not approved yet', 403)
     logger.debug(f"Resolved artist: id={artist.id}, supabase_user_id={artist.supabase_user_id}")
     requests = request_mgr.get_requests_for_artist_with_recommendation(artist.id)
 
@@ -748,20 +737,20 @@ def list_my_booking_requests():
 @jwt_required()
 @swag_from('../resources/swagger/requests_offer_get_put.yml')
 def artist_offer(req_id):
-    """GET: liefert das eigene Angebot; PUT: speichert/aktualisiert die eigene Gage und setzt Status auf 'angeboten'."""
+    """GET: Return the artist's offer for a request. PUT: Save or update the artist's offer."""
     user_id, artist = get_current_user()
     logger.debug(f"artist_offer called by supabase_user_id={user_id} for req_id={req_id} method={request.method}")
     if not artist:
-        return jsonify({'error': 'Current user not linked to an artist'}), 403
+        return error_response('forbidden', 'Current user not linked to an artist', 403)
     if getattr(artist, 'approval_status', '') != 'approved':
-        return jsonify({'error': 'Artist not approved yet'}), 403
+        return error_response('forbidden', 'Artist not approved yet', 403)
 
     if request.method == 'PUT':
         try:
             payload = request.get_json(silent=True) or {}
             price_offered = payload.get('price_offered')
             if price_offered is None:
-                return jsonify({'error': 'price_offered is required'}), 400
+                return error_response('validation_error', 'price_offered is required', 400)
             # persist in pivot and set status='angeboten'
             request_mgr.set_offer(req_id, artist.id, price_offered)
             # Nach dem Speichern erneut aus Pivot lesen
@@ -770,14 +759,14 @@ def artist_offer(req_id):
             return jsonify(offer_data or {'price_offered': price_offered, 'status': 'angeboten'}), 200
         except Exception as e:
             logger.exception('Failed to set artist offer')
-            return jsonify({'error': 'Failed to set offer', 'details': str(e)}), 500
+            return error_response('internal_error', f'Failed to set offer: {str(e)}', 500)
 
     # GET-Fall
     logger.debug(f"Resolved artist for offer lookup: id={artist.id} name={getattr(artist, 'name', None)}")
     offer_data = request_mgr.get_artist_offer(req_id, artist.id)
     logger.debug(f"artist_offer GET result: {offer_data}")
     if offer_data is None:
-        return jsonify({'error': 'Offer not found or not permitted'}), 404
+        return error_response('not_found', 'Offer not found or not permitted', 404)
     return jsonify(offer_data), 200
 
 
@@ -795,13 +784,10 @@ except Exception:
 @jwt_required()
 @swag_from('../resources/swagger/invoices_post.yml', validation=False)
 def create_invoice_entry():
-    """Registriert eine Rechnung zu einem Artist. Erwartet mindestens `storage_path` (z. B. `user/<uid>/<file>`).
-    Hinweis: Die Datei selbst liegt in Supabase Storage (Bucket `invoices`).
-    Wenn das `Invoice`-Model nicht vorhanden ist, wird ein No-Op mit 200 zurückgegeben (soft rollout).
-    """
+    """Register an invoice entry for the current artist. Requires storage_path and optional fields."""
     user_id, artist = get_current_user()
     if not artist:
-        return jsonify({'error': 'Current user not linked to an artist'}), 403
+        return error_response('forbidden', 'Current user not linked to an artist', 403)
 
     payload = request.get_json(silent=True) or {}
     storage_path = (payload.get('storage_path') or '').strip()
@@ -811,7 +797,7 @@ def create_invoice_entry():
     notes = payload.get('notes')
 
     if not storage_path:
-        return jsonify({'error': 'storage_path is required'}), 400
+        return error_response('validation_error', 'storage_path is required', 400)
 
     # parse date if provided
     invoice_date = None
@@ -819,7 +805,7 @@ def create_invoice_entry():
         try:
             invoice_date = datetime.fromisoformat(invoice_date_raw).date()
         except Exception:
-            return jsonify({'error': 'invoice_date must be ISO date (YYYY-MM-DD)'}), 400
+            return error_response('validation_error', 'invoice_date must be ISO date (YYYY-MM-DD)', 400)
 
     if not HAS_INVOICE_MODEL:
         # Soft success so Frontend-Uploadflow funktioniert auch ohne DB-Tracking
@@ -860,19 +846,17 @@ def create_invoice_entry():
     except Exception as e:
         logger.exception('Failed to create/update invoice entry')
         db.session.rollback()
-        return jsonify({'error': 'Failed to create invoice', 'details': str(e)}), 500
+        return error_response('internal_error', f'Failed to create invoice: {str(e)}', 500)
 
 
 @api_bp.route('/invoices', methods=['GET'])
 @jwt_required()
 @swag_from('../resources/swagger/invoices_get.yml', validation=False)
 def list_invoices():
-    """Listet die registrierten Rechnungen des eingeloggten Artists (nur, wenn `Invoice`-Model vorhanden ist).
-    Ohne Model gibt es 204 (No Content), da die Dateien direkt in Supabase gelistet werden.
-    """
+    """List all registered invoices of the current artist (if Invoice model is available)."""
     user_id, artist = get_current_user()
     if not artist:
-        return jsonify({'error': 'Current user not linked to an artist'}), 403
+        return error_response('forbidden', 'Current user not linked to an artist', 403)
 
     if not HAS_INVOICE_MODEL:
         return ('', 204)
@@ -894,4 +878,4 @@ def list_invoices():
         ]), 200
     except Exception as e:
         logger.exception('Failed to list invoices')
-        return jsonify({'error': 'Failed to list invoices', 'details': str(e)}), 500
+        return error_response('internal_error', f'Failed to list invoices: {str(e)}', 500)

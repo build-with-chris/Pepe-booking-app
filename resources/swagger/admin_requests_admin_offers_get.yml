@@ -1,35 +1,42 @@
 tags:
   - AdminOffers
-description: |
-  Listet alle Admin-Angebote für eine bestimmte Booking-Request.
 security:
-  - Bearer: []
+  - bearerAuth: []
+summary: List admin offers for a booking request
+description: Returns all admin-created offers for the given booking request. Admin only.
 parameters:
   - name: req_id
     in: path
     required: true
-    type: integer
-    description: ID der Booking-Anfrage
+    description: Booking request ID
+    schema:
+      type: integer
 responses:
   200:
-    description: Array mit allen Admin-Angeboten
-    schema:
-      type: array
-      items:
-        type: object
-        properties:
-          id:
-            type: integer
-          request_id:
-            type: integer
-          admin_id:
-            type: integer
-          override_price:
-            type: integer
-          notes:
-            type: string
-          created_at:
-            type: string
-            format: date-time
+    description: Array of admin offers
+    content:
+      application/json:
+        schema:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              request_id:
+                type: integer
+              admin_id:
+                type: integer
+              override_price:
+                type: integer
+              notes:
+                type: string
+              created_at:
+                type: string
+                format: date-time
   403:
-    description: Forbidden – nur Admins dürfen
+    description: Forbidden – admin only
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'

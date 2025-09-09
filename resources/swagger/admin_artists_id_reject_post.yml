@@ -1,51 +1,61 @@
-swagger: "2.0"
-info:
-  title: Admin – Artist ablehnen
-  version: "1.0"
-  description: Setzt `approval_status=rejected` und speichert optionalen Ablehnungsgrund.
 tags:
-  - Admin
-securityDefinitions:
-  bearerAuth:
-    type: apiKey
-    name: Authorization
-    in: header
-    description: 'JWT im Format: Bearer <token>'
-paths:
-  /admin/artists/{artist_id}/reject:
-    post:
-      tags: [Admin]
-      summary: Artist ablehnen
-      description: Erfordert Admin-Rechte.
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: artist_id
-          in: path
-          required: true
-          type: integer
-          example: 42
-        - name: body
-          in: body
-          required: false
-          schema:
-            type: object
-            properties:
-              reason:
-                type: string
-                example: "Profil unvollständig (bitte Profilbild & Disziplinen ergänzen)"
-      responses:
-        200:
-          description: OK
-          schema:
-            type: object
-            properties:
-              id: { type: integer, example: 42 }
-              status: { type: string, example: "rejected" }
-              rejection_reason: { type: string, example: "Profil unvollständig" }
-              approved_at: { type: string, example: "2025-08-10T12:34:56Z" }
-              approved_by: { type: integer, example: 7 }
-        403:
-          description: Nicht erlaubt (kein Admin)
-        404:
-          description: Artist nicht gefunden
+  - AdminArtists
+security:
+  - bearerAuth: []
+summary: Reject an artist
+description: Sets approval_status to 'rejected' for the given artist and stores an optional reason. Admin only.
+parameters:
+  - in: path
+    name: artist_id
+    required: true
+    description: Artist ID
+    schema:
+      type: integer
+requestBody:
+  required: false
+  content:
+    application/json:
+      schema:
+        type: object
+        properties:
+          reason:
+            type: string
+            description: Optional rejection reason
+responses:
+  200:
+    description: Artist rejected
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 42
+            status:
+              type: string
+              example: rejected
+            rejection_reason:
+              type: string
+              example: "Profile incomplete"
+            approved_at:
+              type: string
+              format: date-time
+              nullable: true
+              example: null
+            approved_by:
+              type: integer
+              nullable: true
+              example: null
+  403:
+    description: Forbidden – admin only
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  404:
+    description: Artist not found
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'

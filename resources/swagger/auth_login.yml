@@ -1,27 +1,23 @@
 tags:
   - Auth
-summary: Log in an existing user
-description: Use this endpoint to authenticate a user by email and password.
-consumes:
-  - application/json
-parameters:
-  - in: body
-    name: credentials
-    required: true
-    schema:
-      type: object
-      required:
-        - email
-        - password
-      properties:
-        email:
-          type: string
-          description: User's email address
-        password:
-          type: string
-          description: User's password
+summary: Log in a user
+description: Authenticate a user by email and password.
+requestBody:
+  required: true
+  content:
+    application/json:
+      schema:
+        type: object
+        required: [email, password]
+        properties:
+          email: { type: string, format: email }
+          password: { type: string }
 responses:
   200:
-    description: Login successful, user is redirected to requests list
+    description: Login successful
   401:
     description: Invalid email or password
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'

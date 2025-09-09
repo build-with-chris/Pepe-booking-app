@@ -1,16 +1,25 @@
+
+
 tags:
-  - Invoices
+  - AdminInvoices
 security:
   - bearerAuth: []
-summary: Upload invoice metadata
-description: Links a Supabase Storage invoice file to the current artist.
+summary: Update an invoice (partial)
+description: Partially update invoice metadata by ID. Admin only.
+parameters:
+  - in: path
+    name: invoice_id
+    required: true
+    description: Invoice ID
+    schema:
+      type: integer
 requestBody:
   required: true
   content:
     application/json:
       schema:
         type: object
-        required: [storage_path]
+        description: Any subset of fields to update
         properties:
           storage_path:
             type: string
@@ -27,18 +36,34 @@ requestBody:
             example: 2025-08-16
           notes:
             type: string
-            example: Invoice for August 2025
+            example: Updated note from admin
 responses:
   200:
-    description: Invoice successfully linked
+    description: Invoice updated
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Invoice'
   400:
     description: Invalid payload
     content:
       application/json:
         schema:
           $ref: '#/components/schemas/Error'
-  401:
-    description: Unauthorized
+  403:
+    description: Forbidden – admin only
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  404:
+    description: Invoice not found
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  500:
+    description: Internal server error
     content:
       application/json:
         schema:

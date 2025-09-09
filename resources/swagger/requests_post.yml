@@ -1,85 +1,77 @@
-description: |
-  Create a new booking request.
-
-  **Event Types:** Private Feier, Firmenfeier, Incentive, Streetshow
-
-  **Disciplines:** Zauberer, Cyr-Wheel, Bodenakrobatik, Luftakrobatik, Partnerakrobatik, Chinese Pole, Hula Hoop, Handstand, Contemporary Dance, Breakdance, Teeterboard, Jonglage, Moderation, Pantomime/Entertainment
 tags:
   - Requests
+summary: Create a new booking request
+description: Create a booking request and return a calculated price range. Supports an optional Idempotency-Key header to avoid duplicate creations.
 parameters:
-  - name: body
-    in: body
-    required: true
+  - in: header
+    name: Idempotency-Key
+    required: false
+    description: Prevent duplicate creations on reload
     schema:
-      type: object
-      properties:
-        client_name:
-          type: string
-        client_email:
-          type: string
-        event_date:
-          type: string
-          default: '2025-12-31'
-        event_time:
-          type: string
-          default: '19:00'
-        duration_minutes:
-          type: integer
-        event_address:
-          type: string
-        event_type:
-          type: string
-          enum:
-            - Private Feier
-            - Firmenfeier
-            - Incentive
-            - Streetshow
-          description: "Allowed values: Private Feier, Firmenfeier, Incentive, Streetshow"
-          example: "Private Feier"
-        show_type:
-          type: string
-          enum:
-            - Walking Act
-            - Bühnen Show
-          description: "Allowed values: Walking Act, Bühnen Show"
-          example: "Walking Act"
-        disciplines:
-          type: array
-          description: "Allowed values: Zauberer, Cyr-Wheel, Bodenakrobatik, Luftakrobatik, Partnerakrobatik, Chinese Pole, Hula Hoop, Handstand, Contemporary Dance, Breakdance, Teeterboard, Jonglage, Moderation, Pantomime/Entertainment"
-          items:
-            type: string
-            enum:
-              - Zauberer
-              - Cyr-Wheel
-              - Bodenakrobatik
-              - Luftakrobatik
-              - Partnerakrobatik
-              - Chinese Pole
-              - Hula Hoop
-              - Handstand
-              - Contemporary Dance
-              - Breakdance
-              - Teeterboard
-              - Jonglage
-              - Moderation
-              - Pantomime/Entertainment
-          example: ["Zauberer", "Cyr-Wheel"]
-        team_size:
-          type: integer
-        number_of_guests:
-          type: integer
-        is_indoor:
-          type: boolean
-        needs_light:
-          type: boolean
-        needs_sound:
-          type: boolean
-        newsletter_opt_in:
-          type: boolean
-        distance_km:
-          type: number
-        special_requests:
-          type: string
+      type: string
+requestBody:
+  required: true
+  content:
+    application/json:
+      schema:
+        type: object
+        required: [client_name, client_email, event_date, event_time, duration_minutes, event_type, number_of_guests, event_address]
+        properties:
+          client_name: { type: string }
+          client_email: { type: string, format: email }
+          event_date: { type: string, format: date, example: '2025-12-31' }
+          event_time: { type: string, example: '19:00' }
+          duration_minutes: { type: integer }
+          event_address: { type: string }
+          event_type: { type: string, example: 'Gala' }
+          show_type: { type: string, example: 'Walking Act' }
+          disciplines:
+            type: array
+            items: { type: string }
+          team_size: { oneOf: [{type: integer}, {type: string}] }
+          number_of_guests: { type: integer }
+          is_indoor: { type: boolean }
+          needs_light: { type: boolean }
+          needs_sound: { type: boolean }
+          newsletter_opt_in: { type: boolean }
+          distance_km: { type: number }
+          special_requests: { type: string }
 responses:
   201:
     description: Booking request created with calculated price range
+    headers:
+      Location:
+        schema: { type: string }
+      Idempotent-Replay:
+        schema: { type: string, enum: ["true", "false"] }
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            request_id: { type: integer }
+            price_min: { type: number, nullable: true }
+            price_max: { type: number, nullable: true }
+            num_available_artists: { type: integer }
+            matched_artists:
+              type: array
+              items:
+                $ref: '#/components/schemas/Artist'
+  400:
+    description: Validation error
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  429:
+    description: Rate limit exceeded
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  500:
+    description: Internal server error
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'

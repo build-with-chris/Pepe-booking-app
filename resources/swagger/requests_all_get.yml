@@ -1,56 +1,27 @@
 tags:
   - Admin
-summary: List all booking requests (Admin only)
-description: Returns a full list of all booking requests in the system. Access restricted to admin users.
+security:
+  - bearerAuth: []
+summary: List all booking requests (admin only)
+description: Returns a full list of all booking requests in the system. Admin only.
 responses:
   200:
-    description: A list of all booking requests
-    schema:
-      type: array
-      items:
-        type: object
-        properties:
-          id:
-            type: integer
-          client_name:
-            type: string
-          client_email:
-            type: string
-          event_date:
-            type: string
-          event_time:
-            type: string
-          duration_minutes:
-            type: integer
-          event_type:
-            type: string
-          show_discipline:
-            type: string
-          team_size:
-            type: integer
-          number_of_guests:
-            type: integer
-          event_address:
-            type: string
-          is_indoor:
-            type: boolean
-          special_requests:
-            type: string
-          needs_light:
-            type: boolean
-          needs_sound:
-            type: boolean
-          status:
-            type: string
-          price_min:
-            type: number
-          price_max:
-            type: number
-          price_offered:
-            type: number
-          artist_ids:
-            type: array
-            items:
-              type: integer
+    description: List of all booking requests
+    content:
+      application/json:
+        schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookingRequest'
   403:
-    description: Forbidden - Only admins are allowed to access this endpoint
+    description: Forbidden – admin only
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  500:
+    description: Internal server error
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'

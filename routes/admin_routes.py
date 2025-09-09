@@ -1,19 +1,24 @@
 from flask import Blueprint, request, jsonify
+from helpers.http_responses import error_response
 from flasgger import swag_from
-from routes.api_routes import get_current_user
 from managers.booking_requests_manager import BookingRequestManager
 from managers.admin_offer_manager import AdminOfferManager
 from managers.availability_manager import AvailabilityManager
 from managers.artist_manager import ArtistManager
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from models import Artist
-from app import db
+from models import db
 import os
 import logging
 import requests
 from urllib.parse import urljoin
+from helpers.authz import admin_required
+
 
 logger = logging.getLogger(__name__)
+
+HERE = os.path.dirname(__file__)
+SWAG = lambda name: os.path.join(HERE, '..', 'resources', 'swagger', name)
 
 """
 Admin-Modul: Enthält alle Endpunkte zum Verwalten von Buchungsanfragen,
@@ -43,17 +48,10 @@ except Exception:
 # -------------------------------------------------------------
 @admin_bp.route('/invoices', methods=['GET'])
 @jwt_required()
-@swag_from('../resources/swagger/admin_invoices_get.yml', validation=False)
+@admin_required
+@swag_from(SWAG('admin_invoices_get.yml'), validation=False)
 def admin_list_invoices():
     """Listet alle Rechnungen mit Artist-Infos (nur Admins)."""
-    claims = get_jwt()
-    app_md = claims.get('app_metadata') or {}
-    is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
-    if not is_admin:
-        user_id, artist = get_current_user()
-        is_admin = bool(artist and getattr(artist, 'is_admin', False))
-    if not is_admin:
-        return jsonify({'error': 'Not allowed'}), 403
 
     if not HAS_INVOICE_MODEL:
         # Kein Invoice-Model vorhanden -> leere Liste zurückgeben
@@ -80,31 +78,24 @@ def admin_list_invoices():
         return jsonify(out), 200
     except Exception as e:
         logger.exception('[ADMIN] list invoices failed: %s', e)
-        return jsonify({'error': 'internal error'}), 500
+        return error_response('internal_error', 'Unexpected server error', 500)
 
 
 @admin_bp.route('/invoices/<int:invoice_id>', methods=['PATCH'])
 @jwt_required()
-@swag_from('../resources/swagger/admin_invoices_patch.yml', validation=False)
+@admin_required
+@swag_from(SWAG('admin_invoices_patch.yml'), validation=False)
 def admin_patch_invoice(invoice_id: int):
     """Aktualisiert Felder einer Rechnung (nur Admins)."""
-    claims = get_jwt()
-    app_md = claims.get('app_metadata') or {}
-    is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
-    if not is_admin:
-        user_id, artist = get_current_user()
-        is_admin = bool(artist and getattr(artist, 'is_admin', False))
-    if not is_admin:
-        return jsonify({'error': 'Not allowed'}), 403
 
     if not HAS_INVOICE_MODEL:
-        return jsonify({'error': 'Invoice model not available'}), 400
+        return error_response('invalid_request', 'Invoice model not available', 400)
 
     data = request.get_json(silent=True) or {}
     try:
         inv = Invoice.query.get(invoice_id)
         if not inv:
-            return jsonify({'error': 'not found'}), 404
+            return error_response('not_found', 'Resource not found', 404)
 
         # erlaubte Felder patchen
         if 'status' in data:
@@ -124,32 +115,24 @@ def admin_patch_invoice(invoice_id: int):
     except Exception as e:
         logger.exception('[ADMIN] patch invoice failed: %s', e)
         db.session.rollback()
-        return jsonify({'error': 'internal error'}), 500
+        return error_response('internal_error', 'Unexpected server error', 500)
 
 
 @admin_bp.route('/invoices/<int:invoice_id>/url', methods=['GET'])
 @jwt_required()
-@swag_from('../resources/swagger/admin_invoices_url_get.yml', validation=False)
+@admin_required
+@swag_from(SWAG('admin_invoices_url_get.yml'), validation=False)
 def admin_invoice_signed_url(invoice_id: int):
     """Erzeugt eine kurzlebige signierte URL (30 Min) für eine private Invoice-Datei im Supabase Storage.
     Benötigt SUPABASE_URL, SUPABASE_SERVICE_ROLE und optional INVOICE_BUCKET (default: 'invoices').
     """
-    # Inline-Admin-Check wie in anderen Admin-Routen
-    claims = get_jwt()
-    app_md = claims.get('app_metadata') or {}
-    is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
-    if not is_admin:
-        _uid, artist = get_current_user()
-        is_admin = bool(artist and getattr(artist, 'is_admin', False))
-    if not is_admin:
-        return jsonify({'error': 'Not allowed'}), 403
 
     if not HAS_INVOICE_MODEL:
-        return jsonify({'error': 'Invoice model not available'}), 400
+        return error_response('invalid_request', 'Invoice model not available', 400)
 
     inv = Invoice.query.get(invoice_id)
     if not inv:
-        return jsonify({'error': 'not found'}), 404
+        return error_response('not_found', 'Resource not found', 404)
 
     supa_url = os.getenv('SUPABASE_URL')
     service_key = os.getenv('SUPABASE_SERVICE_ROLE') or os.getenv('SUPABASE_SERVICE_KEY')
@@ -161,7 +144,7 @@ def admin_invoice_signed_url(invoice_id: int):
         missing.append('SUPABASE_SERVICE_ROLE')
     if missing:
         logger.error('[ADMIN] missing env for sign url: %s', ','.join(missing))
-        return jsonify({'error': 'Missing env', 'missing': missing}), 500
+        return error_response('internal_error', f'Missing env: {",".join(missing)}', 500)
 
     # --- Normalize storage path -------------------------------------------------
     raw_path = (inv.storage_path or '').strip()
@@ -195,7 +178,7 @@ def admin_invoice_signed_url(invoice_id: int):
 
     # basic sanity
     if not object_path or '..' in object_path:
-        return jsonify({'error': 'requested path is invalid'}), 400
+        return error_response('invalid_request', 'Requested path is invalid', 400)
 
     # Build Storage sign endpoint: /storage/v1/object/sign/<bucket>/<object_path>
     sign_endpoint = f"/storage/v1/object/sign/{bucket}/{object_path}"
@@ -213,7 +196,7 @@ def admin_invoice_signed_url(invoice_id: int):
         )
         if resp.status_code != 200:
             logger.error('[ADMIN] sign url failed: %s %s', resp.status_code, resp.text[:300])
-            return jsonify({'error': 'sign failed', 'status': resp.status_code}), 502
+            return error_response('upstream_error', f'Sign failed with status {resp.status_code}', 502)
 
         data = resp.json()
         signed_path = None
@@ -224,7 +207,7 @@ def admin_invoice_signed_url(invoice_id: int):
 
         if not signed_path:
             logger.error('[ADMIN] sign url unexpected payload: %r', data)
-            return jsonify({'error': 'sign response invalid'}), 502
+            return error_response('upstream_error', 'Invalid sign response from storage', 502)
 
         # If response is already absolute, return as is
         if isinstance(signed_path, str) and (signed_path.startswith('http://') or signed_path.startswith('https://')):
@@ -239,14 +222,15 @@ def admin_invoice_signed_url(invoice_id: int):
         return jsonify({'url': signed_full}), 200
     except Exception as e:
         logger.exception('[ADMIN] sign url exception: %s', e)
-        return jsonify({'error': 'internal error'}), 500
+        return error_response('internal_error', 'Unexpected server error', 500)
     
 
 
 # Admin rights
 @admin_bp.route('/requests/all', methods=['GET'])
 @jwt_required()
-@swag_from('../resources/swagger/requests_all_get.yml')
+@admin_required
+@swag_from(SWAG('requests_all_get.yml'))
 def list_all_requests():
     """Gibt alle Buchungsanfragen zurück (Admin-View)."""
     all_requests = request_mgr.get_all_requests()
@@ -278,7 +262,8 @@ def list_all_requests():
 # AdminOffer CRUD
 @admin_bp.route('/requests/<int:req_id>/admin_offers', methods=['GET'])
 @jwt_required()
-@swag_from('../resources/swagger/admin_requests_admin_offers_get.yml')
+@admin_required
+@swag_from(SWAG('admin_requests_admin_offers_get.yml'))
 def list_admin_offers(req_id):
     """Gibt alle Admin-Angebote für eine bestimmte Buchungsanfrage zurück."""
     offers = offer_mgr.get_admin_offers(req_id)
@@ -294,22 +279,24 @@ def list_admin_offers(req_id):
 
 @admin_bp.route('/admin_offers/<int:offer_id>', methods=['GET'])
 @jwt_required()
+@admin_required
 def get_admin_offer(offer_id):
-    """Gibt ein einzelnes Admin-Angebot anhand seiner ID zurück."""
+    """Return a single admin offer by its ID (admin only)."""
     offer = offer_mgr.get_admin_offer(offer_id)
     if not offer:
-        return jsonify({'error': 'Not found'}), 404
+        return error_response('not_found', 'Resource not found', 404)
     return jsonify(offer_mgr.serialize(offer)), 200
 
 @admin_bp.route('/requests/<int:req_id>/admin_offers', methods=['POST'])
 @jwt_required()
-@swag_from('../resources/swagger/admin_requests_admin_offers_post.yml')
+@admin_required
+@swag_from(SWAG('admin_requests_admin_offers_post.yml'))
 def create_admin_offer(req_id):
     """Erstellt ein neues Admin-Angebot für eine Buchungsanfrage."""
     data = request.json
     price = data.get('override_price')
     if price is None:
-        return jsonify({'error': 'override_price is required'}), 400
+        return error_response('validation_error', 'override_price is required', 400)
     notes = data.get('notes')
     user_id = None
     # Try to get user_id from g.user if available
@@ -321,15 +308,16 @@ def create_admin_offer(req_id):
 
 @admin_bp.route('/admin_offers/<int:offer_id>', methods=['PUT'])
 @jwt_required()
-@swag_from('../resources/swagger/admin_admin_offers_put.yml')
+@admin_required
+@swag_from(SWAG('admin_admin_offers_put.yml'))
 def update_admin_offer(offer_id):
-    """Aktualisiert ein bestehendes Admin-Angebot."""
+    """Update an existing admin offer (admin only)."""
     data = request.json
     price = data.get('override_price')
     notes = data.get('notes')
     offer = offer_mgr.update_admin_offer(offer_id, price, notes)
     if not offer:
-        return jsonify({'error': 'Not found'}), 404
+        return error_response('not_found', 'Resource not found', 404)
     return jsonify({
         'id': offer.id,
         'override_price': offer.override_price,
@@ -338,12 +326,13 @@ def update_admin_offer(offer_id):
 
 @admin_bp.route('/admin_offers/<int:offer_id>', methods=['DELETE'])
 @jwt_required()
-@swag_from('../resources/swagger/admin_admin_offers_delete.yml')
+@admin_required
+@swag_from(SWAG('admin_admin_offers_delete.yml'))
 def delete_admin_offer(offer_id):
-    """Löscht ein Admin-Angebot anhand seiner ID."""
+    """Delete an admin offer by ID (admin only)."""
     deleted = offer_mgr.delete_admin_offer(offer_id)
     if not deleted:
-        return jsonify({'error': 'Not found'}), 404
+        return error_response('not_found', 'Resource not found', 404)
     return jsonify({'deleted': deleted.id})
 
 # -------------------------------------------------------------
@@ -351,25 +340,17 @@ def delete_admin_offer(offer_id):
 # -------------------------------------------------------------
 @admin_bp.route('/artists', methods=['GET'])
 @jwt_required()
-@swag_from('../resources/swagger/admin_artists_get.yml')
+@admin_required
+@swag_from(SWAG('admin_artists_get.yml'))
 def list_artists_by_status():
-    """Listet Artists nach Freigabe-Status (default: pending)."""
+    """List artists filtered by approval status (admin only)."""
     logger.debug(f"[ADMIN] list_artists_by_status called; args={dict(request.args)}")
     try:
-        claims = get_jwt()
-        app_md = claims.get('app_metadata') or {}
-        is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
-        if not is_admin:
-            user_id, artist = get_current_user()
-            is_admin = bool(artist and getattr(artist, 'is_admin', False))
-        logger.debug(f"[ADMIN] list_artists_by_status claims_role={claims.get('role')} app_meta_role={(app_md or {}).get('role')} resolved_is_admin={is_admin}")
-        if not is_admin:
-            return jsonify({'error': 'Not allowed'}), 403
 
         status = (request.args.get('status') or 'pending').lower()
         if status not in {'pending', 'approved', 'rejected', 'unsubmitted'}:
             logger.warning(f"[ADMIN] invalid status parameter: {status}")
-            return jsonify({'error': 'invalid status'}), 400
+            return error_response('validation_error', 'Invalid status parameter', 400)
 
         try:
             if status == 'pending':
@@ -404,33 +385,24 @@ def list_artists_by_status():
         return jsonify([_serialize(a) for a in artists]), 200
     except Exception as e:
         logger.exception(f"[ADMIN] list_artists_by_status failed: {e}")
-        return jsonify({'error': 'internal error'}), 500
+        return error_response('internal_error', 'Unexpected server error', 500)
 
 
 @admin_bp.route('/artists/<int:artist_id>/approve', methods=['POST'])
 @jwt_required()
-@swag_from('../resources/swagger/admin_artists_id_approve_post.yml')
+@admin_required
+@swag_from(SWAG('admin_artists_id_approve_post.yml'))
 def approve_artist(artist_id):
-    """Gibt einen Artist frei (setzt approval_status=approved)."""
+    """Approve an artist (set approval_status=approved)."""
     logger.debug(f"[ADMIN] approve_artist called; artist_id={artist_id}")
     try:
-        claims = get_jwt()
-        app_md = claims.get('app_metadata') or {}
-        is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
-        if not is_admin:
-            user_id, artist = get_current_user()
-            is_admin = bool(artist and getattr(artist, 'is_admin', False))
-        logger.debug(f"[ADMIN] approve_artist claims_role={claims.get('role')} app_meta_role={(app_md or {}).get('role')} resolved_is_admin={is_admin}")
-        if not is_admin:
-            return jsonify({'error': 'Not allowed'}), 403
-
-        admin_id = claims.get('user_id') or claims.get('sub') or get_jwt_identity()
+        admin_id = get_jwt_identity()
         logger.debug(f"[ADMIN] approve_artist admin_id={admin_id}")
 
         artist = offer_mgr.approve_artist(artist_id=artist_id, admin_id=admin_id)
         if not artist:
             logger.warning(f"[ADMIN] approve_artist not found: artist_id={artist_id}")
-            return jsonify({'error': 'Not found'}), 404
+            return error_response('not_found', 'Resource not found', 404)
 
         logger.info(f"[ADMIN] artist approved: artist_id={artist.id} by admin_id={admin_id}")
         return jsonify({
@@ -441,35 +413,26 @@ def approve_artist(artist_id):
         }), 200
     except Exception as e:
         logger.exception(f"[ADMIN] approve_artist failed for artist_id={artist_id}: {e}")
-        return jsonify({'error': 'internal error'}), 500
+        return error_response('internal_error', 'Unexpected server error', 500)
 
 
 @admin_bp.route('/artists/<int:artist_id>/reject', methods=['POST'])
 @jwt_required()
-@swag_from('../resources/swagger/admin_artists_id_reject_post.yml')
+@admin_required
+@swag_from(SWAG('admin_artists_id_reject_post.yml'))
 def reject_artist(artist_id):
-    """Lehnt einen Artist ab (approval_status=rejected) und speichert optionalen Grund."""
+    """Reject an artist (set approval_status=rejected with optional reason)."""
     logger.debug(f"[ADMIN] reject_artist called; artist_id={artist_id}")
     try:
-        claims = get_jwt()
-        app_md = claims.get('app_metadata') or {}
-        is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
-        if not is_admin:
-            user_id, artist = get_current_user()
-            is_admin = bool(artist and getattr(artist, 'is_admin', False))
-        logger.debug(f"[ADMIN] reject_artist claims_role={claims.get('role')} app_meta_role={(app_md or {}).get('role')} resolved_is_admin={is_admin}")
-        if not is_admin:
-            return jsonify({'error': 'Not allowed'}), 403
-
         body = request.get_json(silent=True) or {}
         reason = (body.get('reason') or body.get('comment') or '').strip()
-        admin_id = claims.get('user_id') or claims.get('sub') or get_jwt_identity()
+        admin_id = get_jwt_identity()
         logger.debug(f"[ADMIN] reject_artist admin_id={admin_id} reason={reason!r}")
 
         artist = offer_mgr.reject_artist(artist_id=artist_id, admin_id=admin_id, reason=reason)
         if not artist:
             logger.warning(f"[ADMIN] reject_artist not found: artist_id={artist_id}")
-            return jsonify({'error': 'Not found'}), 404
+            return error_response('not_found', 'Resource not found', 404)
 
         logger.info(f"[ADMIN] artist rejected: artist_id={artist.id} by admin_id={admin_id} reason={reason!r}")
         return jsonify({
@@ -481,71 +444,49 @@ def reject_artist(artist_id):
         }), 200
     except Exception as e:
         logger.exception(f"[ADMIN] reject_artist failed for artist_id={artist_id}: {e}")
-        return jsonify({'error': 'internal error'}), 500
+        return error_response('internal_error', 'Unexpected server error', 500)
 
 # -------------------------------------------------------------
 # Per-Artist-Status einer Anfrage (Admin) 08.08.25
 # -------------------------------------------------------------
 @admin_bp.route('/requests/<int:req_id>/artist_status', methods=['GET'])
 @jwt_required()
-@swag_from('../resources/swagger/admin_artist_status_get.yml')
+@admin_required
+@swag_from(SWAG('admin_artist_status_get.yml'))
 def admin_get_artist_statuses(req_id):
-    """Gibt pro Artist den Status für eine Anfrage zurück (nur Admins)."""
-    claims = get_jwt()
-    app_md = claims.get('app_metadata') or {}
-    is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
-    if not is_admin:
-        user_id, artist = get_current_user()
-        is_admin = bool(artist and getattr(artist, 'is_admin', False))
-    logger.debug(f"admin_get_artist_statuses called for req_id={req_id}; is_admin={is_admin}")
-    if not is_admin:
-        return jsonify({'error': 'Not allowed'}), 403
+    """Return the status of all artists for a request (admin only)."""
     statuses = request_mgr.get_artist_statuses(req_id)
     logger.debug(f"artist_statuses count={len(statuses)} sample={statuses[0] if statuses else None}")
     return jsonify(statuses), 200
 
 @admin_bp.route('/requests/<int:req_id>/artist_status/<int:artist_id>', methods=['PUT'])
 @jwt_required()
-@swag_from('../resources/swagger/admin_artist_status_put.yml')
+@admin_required
+@swag_from(SWAG('admin_artist_status_put.yml'))
 def admin_set_artist_status(req_id, artist_id):
-    """Setzt den Status für genau einen Artist (nur Admins)."""
-    claims = get_jwt()
-    app_md = claims.get('app_metadata') or {}
-    is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
-    if not is_admin:
-        user_id, artist = get_current_user()
-        is_admin = bool(artist and getattr(artist, 'is_admin', False))
-    if not is_admin:
-        return jsonify({'error': 'Not allowed'}), 403
+    """Set the status for one artist in a request (admin only)."""
     data = request.get_json(silent=True) or {}
     new_status = data.get('status')
     comment = data.get('comment') or data.get('remark')
     if not new_status:
-        return jsonify({'error': 'status is required'}), 400
+        return error_response('validation_error', 'status is required', 400)
     ok = request_mgr.set_artist_status(req_id, artist_id, new_status, comment)
     if not ok:
-        return jsonify({'error': 'Invalid request/artist/status'}), 400
+        return error_response('validation_error', 'Invalid request/artist/status', 400)
     return jsonify({'artist_id': artist_id, 'status': new_status, 'comment': comment}), 200
 
 @admin_bp.route('/requests/<int:req_id>/artist_status', methods=['PUT'])
 @jwt_required()
-@swag_from('../resources/swagger/admin_artist_status_bulk_put.yml')
+@admin_required
+@swag_from(SWAG('admin_artist_status_bulk_put.yml'))
 def admin_set_artists_status_bulk(req_id):
-    """Setzt den Status für alle oder eine Liste von Artists (nur Admins)."""
-    claims = get_jwt()
-    app_md = claims.get('app_metadata') or {}
-    is_admin = (isinstance(app_md, dict) and app_md.get('role') == 'admin') or (claims.get('role') == 'admin')
-    if not is_admin:
-        user_id, artist = get_current_user()
-        is_admin = bool(artist and getattr(artist, 'is_admin', False))
-    if not is_admin:
-        return jsonify({'error': 'Not allowed'}), 403
+    """Set the status for all or selected artists in a request (admin only)."""
     data = request.get_json(silent=True) or {}
     new_status = data.get('status')
     comment = data.get('comment') or data.get('remark')
     artist_ids = data.get('artist_ids')  # optional Liste von Artist-IDs
     if not new_status:
-        return jsonify({'error': 'status is required'}), 400
+        return error_response('validation_error', 'status is required', 400)
     if artist_ids and isinstance(artist_ids, list):
         updated = request_mgr.set_artists_status(req_id, artist_ids, new_status, comment)
     else:
@@ -554,9 +495,10 @@ def admin_set_artists_status_bulk(req_id):
 
 @admin_bp.route('/dashboard')
 @jwt_required()
-@swag_from('../resources/swagger/dashboard_get.yml')
+@admin_required
+@swag_from(SWAG('dashboard_get.yml'))
 def dashboard():
-    """Gibt Dashboard-Daten (Verfügbarkeiten und Angebote) zurück."""
+    """Return dashboard data with availabilities and requests (admin only)."""
     slots = avail_mgr.get_all_availabilities()
     offers = request_mgr.get_all_requests()
     return jsonify({

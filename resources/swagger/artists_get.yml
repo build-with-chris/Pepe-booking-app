@@ -1,38 +1,19 @@
-summary: Liste aller Artists
-description: |
-  Gibt alle registrierten Artists zurück. Jeder Artist enthält die grundlegenden Informationen wie Name, E-Mail, Telefonnummer und Disziplinen.
 tags:
   - Artists
+summary: List all artists
+description: Returns all artists with basic profile data.
 responses:
   200:
-    description: Eine Liste von Artists
+    description: List of artists
     content:
       application/json:
         schema:
           type: array
           items:
-            type: object
-            properties:
-              id:
-                type: integer
-              name:
-                type: string
-              email:
-                type: string
-              phone_number:
-                type: string
-              disciplines:
-                type: array
-                items:
-                  type: string
-  default:
-    description: Unerwarteter Fehler
+            $ref: '#/components/schemas/Artist'
+  500:
+    description: Internal server error
     content:
       application/json:
         schema:
-          type: object
-          properties:
-            error:
-              type: string
-            details:
-              type: string
+          $ref: '#/components/schemas/Error'

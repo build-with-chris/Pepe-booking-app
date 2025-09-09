@@ -1,98 +1,61 @@
-
-
-title: Update Artist
-summary: Update existing artist
-description: |
-  Aktualisiert die Felder eines bestehenden Artists. Nur der Artist selbst oder ein Admin dürfen dies. Teilweise Updates sind erlaubt (PATCH semantics).
 tags:
   - Artists
+security:
+  - bearerAuth: []
+summary: Update artist by ID
+description: Update fields of an existing artist. Only the owner or an admin may update. Partial updates are allowed.
 parameters:
-  - name: artist_id
-    in: path
+  - in: path
+    name: artist_id
     required: true
-    type: integer
-    description: ID des zu aktualisierenden Artists
-  - in: header
-    name: Authorization
-    required: true
-    type: string
-    description: "Bearer JWT Token, z.B. 'Bearer <token>'"
-  - name: body
-    in: body
-    required: true
+    description: ID of the artist to update
     schema:
-      type: object
-      properties:
-        name:
-          type: string
-        email:
-          type: string
-          format: email
-        password:
-          type: string
-        phone_number:
-          type: string
-        address:
-          type: string
-        price_min:
-          type: integer
-        price_max:
-          type: integer
-        disciplines:
-          type: array
-          items:
-            type: string
-      example:
-        name: "Christoph Hermann"
-        email: "chris.hermann9397@gmail.com"
-        password: "neuesPasswort123!"
-        phone_number: "015904891419"
-        address: "Kiebtzweg 12a 85464 Finsing"
-        price_min: 600
-        price_max: 1000
-        disciplines:
-          - "Cyr-Wheel"
-          - "Handstand"
+      type: integer
+requestBody:
+  required: true
+  content:
+    application/json:
+      schema:
+        type: object
+        properties:
+          name: { type: string }
+          email: { type: string, format: email }
+          password: { type: string }
+          phone_number: { type: string }
+          address: { type: string }
+          price_min: { type: integer }
+          price_max: { type: integer }
+          disciplines:
+            type: array
+            items: { type: string }
 responses:
   200:
-    description: Artist erfolgreich aktualisiert
-    schema:
-      type: object
-      properties:
-        id:
-          type: integer
-          example: 42
+    description: Artist updated
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Artist'
   400:
-    description: Ungültige Eingabedaten
-    schema:
-      type: object
-      properties:
-        error:
-          type: string
-          example: "Invalid payload"
+    description: Invalid input
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
   403:
-    description: Nicht autorisiert
-    schema:
-      type: object
-      properties:
-        error:
-          type: string
-          example: "Forbidden"
+    description: Forbidden
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
   404:
-    description: Artist nicht gefunden
-    schema:
-      type: object
-      properties:
-        error:
-          type: string
-          example: "Artist not found"
+    description: Artist not found
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
   500:
-    description: Interner Serverfehler
-    schema:
-      type: object
-      properties:
-        error:
-          type: string
-          example: "Failed to update artist"
-        details:
-          type: string
+    description: Internal server error
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'

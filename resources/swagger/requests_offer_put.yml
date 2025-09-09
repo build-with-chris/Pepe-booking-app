@@ -1,41 +1,93 @@
-tags:
-  - Requests
-parameters:
-  - name: req_id
-    in: path
-    type: integer
+get:
+  tags: [Requests]
+  security:
+    - bearerAuth: []
+  summary: Get my offer for a booking request
+  parameters:
+    - in: path
+      name: req_id
+      required: true
+      description: Booking request ID
+      schema:
+        type: integer
+  responses:
+    200:
+      description: Current offer
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              price_offered:
+                type: number
+                example: 1800
+              status:
+                type: string
+                example: offered
+    403:
+      description: Artist not approved yet or current user not linked to an artist
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    404:
+      description: Offer not found or not permitted
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+put:
+  tags: [Requests]
+  security:
+    - bearerAuth: []
+  summary: Set or update my offer for a booking request
+  parameters:
+    - in: path
+      name: req_id
+      required: true
+      description: Booking request ID
+      schema:
+        type: integer
+  requestBody:
     required: true
-    description: ID of the booking request
-  - name: body
-    in: body
-    required: true
-    schema:
-      type: object
-      properties:
-        artist_gage:
-          type: number
-          description: The base fee the artist wants to receive (before agency fee and other costs)
-responses:
-  200:
-    description: Offer calculated and updated successfully based on artist's base fee
-    schema:
-      type: object
-      properties:
-        status:
-          type: string
-          example: offered
-        price_offered:
-          type: number
-          description: The final price offered to the customer (including agency fee and adjustments)
-        price_min:
-          type: number
-          description: Minimum calculated price based on the artist's base fee
-        price_max:
-          type: number
-          description: Maximum calculated price based on the artist's base fee
-  400:
-    description: Bad request (e.g., missing artist_gage)
-  403:
-    description: Not allowed to update this offer
-  404:
-    description: Request not found
+    content:
+      application/json:
+        schema:
+          type: object
+          required: [price_offered]
+          properties:
+            price_offered:
+              type: number
+              example: 1800
+  responses:
+    200:
+      description: Offer saved
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              price_offered:
+                type: number
+                example: 1800
+              status:
+                type: string
+                example: offered
+    400:
+      description: price_offered is required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    403:
+      description: Artist not approved yet or current user not linked to an artist
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    500:
+      description: Failed to set offer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

@@ -1,52 +1,27 @@
 tags:
   - Requests
+security:
+  - bearerAuth: []
+summary: List booking requests for the current artist
+description: Returns booking requests relevant to the authenticated (approved) artist.
 responses:
   200:
-    description: List of booking requests for the current artist
-    schema:
-      type: array
-      items:
-        type: object
-        properties:
-          id:
-            type: integer
-          client_name:
-            type: string
-          client_email:
-            type: string
-          event_date:
-            type: string
-          event_time:
-            type: string
-          duration_minutes:
-            type: integer
-          event_type:
-            type: string
-          show_discipline:
-            type: string
-          team_size:
-            type: integer
-          number_of_guests:
-            type: integer
-          event_address:
-            type: string
-          is_indoor:
-            type: boolean
-          special_requests:
-            type: string
-          needs_light:
-            type: boolean
-          needs_sound:
-            type: boolean
-          status:
-            type: string
-          price_min:
-            type: number
-          price_max:
-            type: number
-          price_offered:
-            type: number
-          artist_ids:
-            type: array
-            items:
-              type: integer
+    description: List of booking requests
+    content:
+      application/json:
+        schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookingRequest'
+  403:
+    description: Artist not approved or current user not linked to an artist
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  500:
+    description: Internal server error
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'

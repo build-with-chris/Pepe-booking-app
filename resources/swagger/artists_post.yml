@@ -1,102 +1,52 @@
-summary: Neuen Artist erstellen
 tags:
   - Artists
-description: |
-  Legt einen neuen Artist an. Erfordert Authentifizierung. Die E-Mail darf noch nicht existieren. Disziplinen müssen angegeben werden.
-  Allowed Disciplines: Zauberer, Cyr-Wheel, Bodenakrobatik, Luftakrobatik, Partnerakrobatik, Chinese Pole, Hula Hoop, Handstand, Contemporary Dance, Breakdance, Teeterboard, Jonglage, Moderation, Pantomime/Entertainment
 security:
-  - Bearer: []
+  - bearerAuth: []
+summary: Create a new artist
+description: Create a new artist. Email must be unique. Disciplines are required.
 requestBody:
   required: true
   content:
     application/json:
       schema:
         type: object
-        required:
-          - name
-          - email
-          - password
-          - disciplines
+        required: [name, email, password, disciplines]
         properties:
-          name:
-            type: string
-          email:
-            type: string
-            format: email
-          password:
-            type: string
+          name: { type: string }
+          email: { type: string, format: email }
+          password: { type: string }
           disciplines:
             type: array
-            items:
-              type: string
-              enum:
-                - Zauberer
-                - Cyr-Wheel
-                - Bodenakrobatik
-                - Luftakrobatik
-                - Partnerakrobatik
-                - Chinese Pole
-                - Hula Hoop
-                - Handstand
-                - Contemporary Dance
-                - Breakdance
-                - Teeterboard
-                - Jonglage
-                - Moderation
-                - Pantomime/Entertainment
-          phone_number:
-            type: string
-          address:
-            type: string
-          price_min:
-            type: integer
-          price_max:
-            type: integer
-          is_admin:
-            type: boolean
-      examples:
-        single:
-          value:
-            name: "Christoph Hermann"
-            email: "chris@beispiel.de"
-            password: "securepassword"
-            disciplines: ["Cyr-Wheel"]
+            items: { type: string }
+          phone_number: { type: string }
+          address: { type: string }
+          price_min: { type: integer }
+          price_max: { type: integer }
+          is_admin: { type: boolean }
 responses:
-  '201':
-    description: Artist erfolgreich erstellt
+  201:
+    description: Artist created
     content:
       application/json:
         schema:
           type: object
           properties:
-            id:
-              type: integer
-  '400':
-    description: Ungültige Eingabedaten
+            id: { type: integer }
+  400:
+    description: Invalid input
     content:
       application/json:
         schema:
-          type: object
-          properties:
-            error:
-              type: string
-  '409':
-    description: E-Mail existiert bereits
+          $ref: '#/components/schemas/Error'
+  409:
+    description: Email already exists
     content:
       application/json:
         schema:
-          type: object
-          properties:
-            error:
-              type: string
-  default:
-    description: Unerwarteter Fehler
+          $ref: '#/components/schemas/Error'
+  500:
+    description: Internal server error
     content:
       application/json:
         schema:
-          type: object
-          properties:
-            error:
-              type: string
-            details:
-              type: string
+          $ref: '#/components/schemas/Error'

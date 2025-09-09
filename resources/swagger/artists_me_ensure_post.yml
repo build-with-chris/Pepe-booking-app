@@ -1,0 +1,45 @@
+tags:
+  - Artists
+security:
+  - bearerAuth: []
+summary: Ensure my artist profile exists
+description: Creates an artist profile for the current user if one does not already exist. If it exists, returns the existing profile.
+requestBody:
+  required: false
+  content:
+    application/json:
+      schema:
+        type: object
+        properties:
+          name:
+            type: string
+            description: Artist name
+          email:
+            type: string
+            format: email
+            description: Artist email
+responses:
+  200:
+    description: Existing artist profile
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Artist'
+  201:
+    description: New artist profile created
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Artist'
+  403:
+    description: Current user not authorized to create artist profile
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  500:
+    description: Internal server error
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'

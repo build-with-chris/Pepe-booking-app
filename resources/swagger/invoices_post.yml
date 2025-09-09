@@ -1,39 +1,23 @@
-
-
-post:
-  summary: Upload invoice metadata
-  description: Links a Supabase Storage invoice file to the current artist. Requires authentication.
-  tags:
-    - invoices
-  requestBody:
-    required: true
+tags:
+  - Invoices
+security:
+  - bearerAuth: []
+summary: List invoices for current artist
+description: Returns all invoices stored for the authenticated artist. If no invoices exist, returns 204 with no body.
+responses:
+  200:
+    description: List of invoices
     content:
       application/json:
         schema:
-          type: object
-          properties:
-            storage_path:
-              type: string
-              example: user/123/invoice-2025-08.pdf
-            amount_cents:
-              type: integer
-              example: 25000
-            currency:
-              type: string
-              example: EUR
-            invoice_date:
-              type: string
-              format: date
-              example: 2025-08-16
-            notes:
-              type: string
-              example: Rechnung für August 2025
-          required:
-            - storage_path
-  responses:
-    '200':
-      description: Invoice successfully linked
-    '400':
-      description: Invalid payload
-    '401':
-      description: Unauthorized
+          type: array
+          items:
+            $ref: '#/components/schemas/Invoice'
+  204:
+    description: No invoices found
+  401:
+    description: Unauthorized
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'

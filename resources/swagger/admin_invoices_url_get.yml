@@ -1,0 +1,50 @@
+
+
+tags:
+  - AdminInvoices
+security:
+  - bearerAuth: []
+summary: Get a temporary download URL for an invoice (admin only)
+description: Returns a time-limited URL to download the invoice file from storage. Admin only.
+parameters:
+  - in: path
+    name: invoice_id
+    required: true
+    description: Invoice ID
+    schema:
+      type: integer
+responses:
+  200:
+    description: Signed URL generated
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            url:
+              type: string
+              description: Time-limited download URL
+              example: "https://storage.example.com/signed/abc123?..."
+            expires_at:
+              type: string
+              format: date-time
+              description: Expiration timestamp of the signed URL
+              example: "2025-09-10T12:00:00Z"
+  403:
+    description: Forbidden – admin only
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  404:
+    description: Invoice not found
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
+  500:
+    description: Failed to generate URL
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/Error'
