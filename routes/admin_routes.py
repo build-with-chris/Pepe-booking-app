@@ -446,6 +446,70 @@ def reject_artist(artist_id):
         logger.exception(f"[ADMIN] reject_artist failed for artist_id={artist_id}: {e}")
         return error_response('internal_error', 'Unexpected server error', 500)
 
+
+# -------------------------------------------------------------
+# New: Delete artist by ID (admin only)
+@admin_bp.route('/artists/<int:artist_id>', methods=['DELETE'])
+@jwt_required()
+@admin_required
+@swag_from({
+    'tags': ['Admin'],
+    'summary': 'Delete an artist by ID (admin only)',
+    'parameters': [
+        {
+            'in': 'path',
+            'name': 'artist_id',
+            'schema': {'type': 'integer'},
+            'required': True,
+            'description': 'ID of the artist to delete'
+        }
+    ],
+    'responses': {
+        '200': {
+            'description': 'Artist deleted',
+            'content': {
+                'application/json': {
+                    'schema': {
+                        'type': 'object',
+                        'properties': {
+                            'deleted': {'type': 'integer'}
+                        }
+                    }
+                }
+            }
+        },
+        '404': {'description': 'Artist not found'},
+        '403': {'description': 'Forbidden'},
+        '409': {'description': 'Conflict due to existing references'},
+        '500': {'description': 'Unexpected server error'}
+    }
+}, validation=False)
+def delete_artist(artist_id: int):
+    """Delete an artist by ID (admin only).
+    Hard delete; returns 409 if the artist is still referenced (FK constraints).
+    """
+    try:
+        artist = Artist.query.get(artist_id)
+        if not artist:
+            return error_response('not_found', 'Resource not found', 404)
+
+        try:
+            db.session.delete(artist)
+            db.session.commit()
+            return jsonify({'deleted': artist_id}), 200
+        except Exception as ex:
+            from sqlalchemy.exc import IntegrityError
+            db.session.rollback()
+            # If there are related bookings/requests, DB may raise FK errors
+            if isinstance(ex, IntegrityError):
+                logger.warning(f"[ADMIN] delete_artist conflict for id={artist_id}: {ex}")
+                return error_response('conflict', 'Artist is referenced by other records', 409)
+            logger.exception(f"[ADMIN] delete_artist failed for id={artist_id}: {ex}")
+            return error_response('internal_error', 'Unexpected server error', 500)
+    except Exception as e:
+        logger.exception(f"[ADMIN] delete_artist outer exception for id={artist_id}: {e}")
+        return error_response('internal_error', 'Unexpected server error', 500)
+
 # -------------------------------------------------------------
 # Per-Artist-Status einer Anfrage (Admin) 08.08.25
 # -------------------------------------------------------------
