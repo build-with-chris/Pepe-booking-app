@@ -47,12 +47,6 @@ logging.getLogger().info(f"Using DB URI: {mask_db_uri(app.config.get('SQLALCHEMY
 db.init_app(app)
 migrate = Migrate(app, db)
 
-@app.before_request
-def _skip_jwt_for_options():
-    """Allow CORS preflight (OPTIONS) without requiring a JWT."""
-    if request.method == 'OPTIONS':
-        return jsonify(), 200
-
 app.register_blueprint(auth_bp,  url_prefix='/auth')
 app.register_blueprint(api_bp,   url_prefix='/api')
 app.register_blueprint(admin_bp, url_prefix='/admin')
@@ -60,7 +54,20 @@ app.register_blueprint(booking_bp)
 
 jwt = JWTManager(app)
 
-CORS(app)
+CORS(
+    app,
+    resources={
+        r"/*": {
+            "origins": [
+                "http://localhost:5173",
+                "https://pepeshows.de"
+            ],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "expose_headers": ["Content-Type", "Authorization", "X-Request-ID"],
+            "supports_credentials": False,
+        }
+    },
+)
 
 template = {
     "openapi": "3.0.3",
@@ -120,27 +127,13 @@ app.config['SWAGGER'] = {
     'ui_params': {
         'validatorUrl': None,
         'docExpansion': 'none',
-        'persistAuthorization': True
+        'persistAuthorization': True,
+        'displayRequestDuration': True,
     }
 }
 
 # Serve Swagger UI at /api-docs (also generates /apispec_raw.json)
 swagger = Swagger(app, template=template, parse=False)
-
-# Serve OpenAPI 3 spec at /apispec_1.json, stripping accidental Swagger 2 key if present
-@app.get('/apispec_1.json')
-def patched_apispec():
-    """Return OpenAPI 3 spec; drop accidental Swagger 2 'swagger' field if present."""
-    try:
-        specs = swagger.loader()
-        # If flasgger (or a fragment) injected a Swagger 2 key, remove it to keep UI happy.
-        if isinstance(specs, dict) and 'openapi' in specs and 'swagger' in specs:
-            specs.pop('swagger', None)
-        return jsonify(specs)
-    except Exception as e:
-        app.logger.exception('Failed to build OpenAPI spec: %s', e)
-        return error_response('openapi_error', str(e), 500)
-
 
 # Debug route for DB config
 @app.get("/__debug/db")
