@@ -63,7 +63,7 @@ jwt = JWTManager(app)
 CORS(app)
 
 template = {
-    "openapi": "3.0.0",
+    "openapi": "3.0.3",
     "info": {
         "title": "Pepe Backend API",
         "description": (
@@ -109,12 +109,14 @@ except Exception as e:
 app.config['SWAGGER'] = {
     'title': "Pepe Backend API",
     'uiversion': 3,
-    # Load ONLY the cleaned spec; do not expose/raw-bind any internal specs
-    'urls': [
-        { 'name': 'Pepe API', 'url': '/apispec_1.json' }
+    'openapi': '3.0.3',
+    'specs': [
+        {
+            'endpoint': 'apispec_1',
+            'route': '/apispec_1.json',
+        }
     ],
-    'specs': [],
-    'specs_route': '/api-docs',
+    'specs_route': '/api-docs/',
     'ui_params': {
         'validatorUrl': None,
         'docExpansion': 'none',

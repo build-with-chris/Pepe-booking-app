@@ -32,6 +32,25 @@ class Config:
     SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
     SMTP_FROM = os.getenv("SMTP_FROM") or SMTP_USER
 
+
+    # --- Swagger / OpenAPI Settings ---
+    SWAGGER = {
+        "title": "Pepe Booking API",
+        # Use Swagger UI v3 to render OpenAPI 3 specs
+        "uiversion": 3,
+        # Ensure the generated root spec uses OpenAPI 3
+        "openapi": "3.0.3",
+        # Route where the Swagger UI will be served (e.g., http://localhost:5000/api-docs/)
+        "specs": [
+            {
+                "endpoint": "apispec_1",
+                "route": "/apispec_1.json",
+            }
+        ],
+        "specs_route": "/api-docs/",
+    }
+
+    
 class TestConfig(Config):
     """Konfiguration für Tests mit In-Memory-Datenbank."""
     TESTING = True
