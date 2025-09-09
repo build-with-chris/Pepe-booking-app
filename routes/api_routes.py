@@ -567,7 +567,7 @@ def get_availability():
             if artist_candidate:
                 # permission: same artist or admin
                 if artist_candidate.id != current_artist.id and not getattr(current_artist, 'is_admin', False):
-                    logger.warning(f"User {current_supabase_id} forbidden from viewing availability of artist {artist_candidate.id}")
+                    logger.warning(f"User {user_id} forbidden from viewing availability of artist {artist_candidate.id}")
                     return error_response('forbidden', 'Forbidden', 403)
                 target_artist = artist_candidate
             else:
@@ -681,7 +681,7 @@ def replace_availability():
     if artist_id_param:
         result = avail_mgr.replace_availabilities_for_artist(target_artist.id, data['dates'])
     else:
-        result = avail_mgr.replace_availabilities_for_user(current_supabase_id, data['dates'])
+        result = avail_mgr.replace_availabilities_for_user(user_id, data['dates'])
     return jsonify(result), 200
 
 
