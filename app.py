@@ -17,6 +17,7 @@ import os
 import yaml
 
 from helpers.http_responses import error_response
+from urllib.parse import urlparse
 
 
 
@@ -54,19 +55,47 @@ app.register_blueprint(booking_bp)
 
 jwt = JWTManager(app)
 
+# --- CORS (dynamic via ENV CORS_ORIGINS with wildcard support) ---
+origins_env = os.getenv("CORS_ORIGINS", "")
+allowed_patterns = [o.strip() for o in origins_env.split(",") if o.strip()]
+
+# Fallback, falls ENV leer ist
+if not allowed_patterns:
+    allowed_patterns = [
+        "http://localhost:5173",
+        "https://pepeshows.de",
+    ]
+
+def origin_allowed(origin: str) -> bool:
+    if not origin:
+        return False
+    # Exaktes Match
+    if origin in allowed_patterns:
+        return True
+    # Wildcard: z. B. "https://*.vercel.app" oder "http://*.foo.bar"
+    try:
+        parsed = urlparse(origin)
+        host = parsed.hostname or ""
+        scheme = parsed.scheme
+    except Exception:
+        return False
+    for pattern in allowed_patterns:
+        if pattern.startswith("https://*") and scheme == "https":
+            suffix = pattern.replace("https://*", "", 1)
+            if host.endswith(suffix):
+                return True
+        if pattern.startswith("http://*") and scheme == "http":
+            suffix = pattern.replace("http://*", "", 1)
+            if host.endswith(suffix):
+                return True
+    return False
+
 CORS(
     app,
-    resources={
-        r"/*": {
-            "origins": [
-                "http://localhost:5173",
-                "https://pepeshows.de"
-            ],
-            "allow_headers": ["Content-Type", "Authorization"],
-            "expose_headers": ["Content-Type", "Authorization", "X-Request-ID"],
-            "supports_credentials": False,
-        }
-    },
+    origins=origin_allowed,  # zentrale, wildcard-fähige Prüfung
+    allow_headers=["Content-Type", "Authorization"],
+    expose_headers=["Content-Type", "Authorization", "X-Request-ID"],
+    supports_credentials=False,
 )
 
 template = {
@@ -141,6 +170,22 @@ def debug_db():
     return {
         "uri": app.config.get("SQLALCHEMY_DATABASE_URI"),
         "testing": app.config.get("TESTING", False)
+    }
+
+# Debug route for CORS config
+@app.get("/__debug/cors")
+def debug_cors():
+    test_origin = request.args.get("origin")
+    is_allowed = None
+    if test_origin:
+        try:
+            is_allowed = origin_allowed(test_origin)
+        except Exception as e:
+            is_allowed = f"error: {e}"
+    return {
+        "allowed_patterns": allowed_patterns,
+        "test_origin": test_origin,
+        "is_allowed": is_allowed,
     }
 
 # Health check endpoint that verifies DB connectivity
