@@ -15,6 +15,7 @@ from sqlalchemy import text
 import logging
 import os
 import yaml
+import re
 
 from helpers.http_responses import error_response
 from urllib.parse import urlparse
@@ -66,37 +67,39 @@ if not allowed_patterns:
         "https://pepeshows.de",
     ]
 
+def _pattern_to_regex_fragment(p: str) -> str:
+    # Exact origin (no wildcard): anchor exact match
+    if "*" not in p:
+        return re.escape(p)
+    # Wildcard supported at host level, e.g. https://*.vercel.app
+    # Convert scheme-specific wildcards to a safe regex
+    if p.startswith("https://*"):
+        suffix = p.replace("https://*", "", 1)
+        return r"https://[^/]+" + re.escape(suffix)
+    if p.startswith("http://*"):
+        suffix = p.replace("http://*", "", 1)
+        return r"http://[^/]+" + re.escape(suffix)
+    # Generic fallback: escape and replace * with a non-greedy host match
+    return re.escape(p).replace(r"\*", r"[^/]+")
+
+def _compile_origins_regex(patterns: list[str]) -> re.Pattern:
+    if not patterns:
+        # match nothing
+        return re.compile(r"^(?!)$")
+    parts = [_pattern_to_regex_fragment(p) for p in patterns]
+    regex = r"^(?:" + "|".join(parts) + r")$"
+    return re.compile(regex)
+
+allowed_origins_regex = _compile_origins_regex(allowed_patterns)
+
 def origin_allowed(origin: str) -> bool:
     if not origin:
         return False
-    # Exaktes Match
-    if origin in allowed_patterns:
-        return True
-    # Wildcard: z. B. "https://*.vercel.app" oder "http://*.foo.bar"
-    try:
-        parsed = urlparse(origin)
-        host = parsed.hostname or ""
-        scheme = parsed.scheme
-    except Exception:
-        return False
-    for pattern in allowed_patterns:
-        if pattern.startswith("https://*") and scheme == "https":
-            suffix = pattern.replace("https://*", "", 1)
-            if host.endswith(suffix):
-                return True
-        if pattern.startswith("http://*") and scheme == "http":
-            suffix = pattern.replace("http://*", "", 1)
-            if host.endswith(suffix):
-                return True
-    return False
-
-# Wrapper for flask-cors: return the allowed origin string or None
-def dynamic_origin(origin, _request):
-    return origin if origin_allowed(origin) else None
+    return bool(allowed_origins_regex.fullmatch(origin))
 
 CORS(
     app,
-    origins=dynamic_origin,  # wrapper returns origin string or None
+    origins=allowed_origins_regex,  # compiled regex accepted by flask-cors
     allow_headers=["Content-Type", "Authorization"],
     expose_headers=["Content-Type", "Authorization", "X-Request-ID"],
     supports_credentials=False,
@@ -183,11 +186,12 @@ def debug_cors():
     is_allowed = None
     if test_origin:
         try:
-            is_allowed = origin_allowed(test_origin)
+            is_allowed = bool(allowed_origins_regex.fullmatch(test_origin))
         except Exception as e:
             is_allowed = f"error: {e}"
     return {
         "allowed_patterns": allowed_patterns,
+        "regex": allowed_origins_regex.pattern,
         "test_origin": test_origin,
         "is_allowed": is_allowed,
     }
