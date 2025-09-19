@@ -90,9 +90,13 @@ def origin_allowed(origin: str) -> bool:
                 return True
     return False
 
+# Wrapper for flask-cors: return the allowed origin string or None
+def dynamic_origin(origin, _request):
+    return origin if origin_allowed(origin) else None
+
 CORS(
     app,
-    origins=origin_allowed,  # zentrale, wildcard-fähige Prüfung
+    origins=dynamic_origin,  # wrapper returns origin string or None
     allow_headers=["Content-Type", "Authorization"],
     expose_headers=["Content-Type", "Authorization", "X-Request-ID"],
     supports_credentials=False,
